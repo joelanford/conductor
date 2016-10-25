@@ -1,11 +1,101 @@
 package conductor
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestStreamOneToMany(t *testing.T) {
+	for i := 1; i < 100; i++ {
+		s := NewStream("test")
+
+		p1 := make(chan *Tuple, i)
+		s.AddProducer("p1", p1)
+
+		c := make([]chan *Tuple, i)
+		for j := 0; j < i; j++ {
+			c[j] = make(chan *Tuple, i)
+			s.AddConsumer(fmt.Sprintf("c%d", j), c[j])
+		}
+
+		tuples := make([]*Tuple, i)
+		for j := 0; j < i; j++ {
+			tuples[j] = &Tuple{Data: map[string]interface{}{"a": j + 1}}
+		}
+
+		for j := 0; j < i; j++ {
+			p1 <- tuples[j]
+		}
+		close(p1)
+
+		var wg sync.WaitGroup
+		wg.Add(i)
+		for j := 0; j < i; j++ {
+			go func(j int) {
+				count := 0
+
+				for tuple := range c[j] {
+					count++
+					assert.Equal(t, count, tuple.Data["a"])
+				}
+				assert.Equal(t, count, i)
+				wg.Done()
+			}(j)
+		}
+		s.Run()
+		wg.Wait()
+	}
+}
+
+func TestStreamManyToOne(t *testing.T) {
+	for i := 1; i < 100; i++ {
+		s := NewStream("test")
+
+		p := make([]chan *Tuple, i)
+		for j := 0; j < i; j++ {
+			p[j] = make(chan *Tuple, i)
+			s.AddProducer(fmt.Sprintf("p%d", j), p[j])
+		}
+
+		c := make(chan *Tuple, i)
+		s.AddConsumer("c", c)
+
+		tuples := make([]*Tuple, i)
+		for j := 0; j < i; j++ {
+			tuples[j] = &Tuple{Data: map[string]interface{}{"a": j + 1}}
+		}
+
+		for j := 0; j < i; j++ {
+			p[j] <- tuples[j]
+			close(p[j])
+		}
+
+		nums := make(map[int]bool)
+		for j := 1; j <= i; j++ {
+			nums[j] = true
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			count := 0
+
+			for tuple := range c {
+				count++
+				delete(nums, tuple.Data["a"].(int))
+			}
+			assert.Equal(t, i, count)
+			assert.Empty(t, nums)
+			wg.Done()
+		}()
+
+		s.Run()
+		wg.Wait()
+	}
+}
 
 func TestStream(t *testing.T) {
 	p1 := make(chan *Tuple, 1)
