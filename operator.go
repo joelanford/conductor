@@ -3,42 +3,20 @@ package conductor
 import "context"
 
 type OperatorContext struct {
-	Name            string
-	Context         context.Context
-	OutputCollector OutputCollector
+	name            string
+	outputCollector *OutputCollector
 }
 
-type ProcessFunc func(ctx *OperatorContext, t *Tuple)
-
-type Operator struct {
-	name string
-
-	inputStream      string
-	inputPartitioner Partitioner
-	inputQueueSize   int
-
-	process ProcessFunc
-
-	parallelism int
-
-	outputStream string
+func (o *OperatorContext) Name() string {
+	return o.name
 }
 
-func NewOperator(name string, process ProcessFunc, parallelism int) *Operator {
-	return &Operator{name: name, process: process, parallelism: parallelism}
+func (o *OperatorContext) OutputCollector() *OutputCollector {
+	return o.outputCollector
 }
 
-func (o *Operator) Consumes(name string, partitioner Partitioner, queueSize int) *Operator {
-	o.inputStream = name
-	o.inputPartitioner = partitioner
-	o.inputQueueSize = queueSize
-	return o
-}
-
-func (o *Operator) Produces(name string) *Operator {
-	o.outputStream = name
-	return o
-}
+type ProcessFunc func(context.Context, *OperatorContext)
+type ProcessTupleFunc func(context.Context, *OperatorContext, *Tuple)
 
 type OutputCollector struct {
 	metadata *TupleMetadata
