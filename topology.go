@@ -42,24 +42,30 @@ func (t *Topology) Run(ctx context.Context) error {
 
 	wg.Add(len(t.sourceOperatorSpecs))
 	for _, o := range t.sourceOperatorSpecs {
-		if _, ok := streams[o.produces.name]; !ok {
-			streams[o.produces.name] = o.produces
-		}
-		producerChan := make(chan *Tuple)
-		o.produces.AddProducer(o.name, producerChan)
+
+		producerChans := make([]chan *Tuple, len(o.produces))
 		opCtx := &OperatorContext{
-			name: o.name,
-			outputCollector: &OutputCollector{
-				metadata: &TupleMetadata{
-					StreamName: o.produces.name,
-					Producer:   o.name,
-				},
-				output: producerChan,
-			},
+			name:            o.name,
+			outputCollector: &OutputCollector{},
 		}
+		for i := 0; i < len(o.produces); i++ {
+			producerChans[i] = make(chan *Tuple)
+			if _, ok := streams[o.produces[i].name]; !ok {
+				streams[o.produces[i].name] = o.produces[i]
+			}
+			o.produces[i].AddProducer(o.name, producerChans[i])
+			opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
+				StreamName: o.produces[i].name,
+				Producer:   o.name,
+			})
+		}
+		opCtx.outputCollector.outputs = producerChans
+
 		go func(ctx context.Context, o *SourceOperatorSpec, opCtx *OperatorContext) {
 			o.process(ctx, opCtx)
-			close(opCtx.outputCollector.output)
+			for _, output := range opCtx.outputCollector.outputs {
+				close(output)
+			}
 			wg.Done()
 		}(ctx, o, opCtx)
 	}
@@ -72,26 +78,24 @@ func (t *Topology) Run(ctx context.Context) error {
 			o.consumes[i].AddConsumer(o.name, consumerChans[i])
 		}
 
-		var outputCollector *OutputCollector
-		if o.produces != nil {
-			if _, ok := streams[o.produces.name]; !ok {
-				streams[o.produces.name] = o.produces
-			}
-			producerChan := make(chan *Tuple)
-			outputCollector = &OutputCollector{
-				metadata: &TupleMetadata{
-					StreamName: o.produces.name,
-					Producer:   o.name,
-				},
-				output: producerChan,
-			}
-			o.produces.AddProducer(o.name, producerChan)
-		}
-
+		producerChans := make([]chan *Tuple, len(o.produces))
 		opCtx := &OperatorContext{
 			name:            o.name,
-			outputCollector: outputCollector,
+			outputCollector: &OutputCollector{},
 		}
+		for i := 0; i < len(o.produces); i++ {
+			producerChans[i] = make(chan *Tuple)
+			if _, ok := streams[o.produces[i].name]; !ok {
+				streams[o.produces[i].name] = o.produces[i]
+			}
+			o.produces[i].AddProducer(o.name, producerChans[i])
+			opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
+				StreamName: o.produces[i].name,
+				Producer:   o.name,
+			})
+		}
+		opCtx.outputCollector.outputs = producerChans
+
 		go func(ctx context.Context, o *OperatorSpec, opCtx *OperatorContext) {
 			var consumerWg sync.WaitGroup
 			consumerWg.Add(len(consumerChans))
@@ -105,8 +109,8 @@ func (t *Topology) Run(ctx context.Context) error {
 			}
 			consumerWg.Wait()
 
-			if opCtx.outputCollector != nil {
-				close(opCtx.outputCollector.output)
+			for _, output := range opCtx.outputCollector.outputs {
+				close(output)
 			}
 			wg.Done()
 		}(ctx, o, opCtx)
@@ -128,11 +132,11 @@ type OperatorSpec struct {
 	process     ProcessTupleFunc
 	parallelism int
 
-	produces *Stream
+	produces []*Stream
 	consumes []*Stream
 }
 
-func (o *OperatorSpec) Produces(streams *Stream) *OperatorSpec {
+func (o *OperatorSpec) Produces(streams ...*Stream) *OperatorSpec {
 	o.produces = streams
 	return o
 }
@@ -147,10 +151,10 @@ type SourceOperatorSpec struct {
 	process     ProcessFunc
 	parallelism int
 
-	produces *Stream
+	produces []*Stream
 }
 
-func (o *SourceOperatorSpec) Produces(streams *Stream) *SourceOperatorSpec {
+func (o *SourceOperatorSpec) Produces(streams ...*Stream) *SourceOperatorSpec {
 	o.produces = streams
 	return o
 }

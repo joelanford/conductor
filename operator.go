@@ -19,10 +19,14 @@ type ProcessFunc func(context.Context, *OperatorContext)
 type ProcessTupleFunc func(context.Context, *OperatorContext, *Tuple, int)
 
 type OutputCollector struct {
-	metadata *TupleMetadata
-	output   chan<- *Tuple
+	metadata []*TupleMetadata
+	outputs  []chan *Tuple
 }
 
-func (o *OutputCollector) Submit(t TupleData) {
-	o.output <- &Tuple{Metadata: o.metadata, Data: t}
+func (o *OutputCollector) Submit(t TupleData, port int) {
+	o.outputs[port] <- &Tuple{Metadata: o.metadata[port], Data: t}
+}
+
+func (o *OutputCollector) NumPorts() int {
+	return len(o.outputs)
 }
