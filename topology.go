@@ -66,8 +66,11 @@ func (t *Topology) Run(ctx context.Context) error {
 
 	wg.Add(len(t.operatorSpecs))
 	for _, o := range t.operatorSpecs {
-		consumerChan := make(chan *Tuple)
-		o.consumes.AddConsumer(o.name, consumerChan)
+		consumerChans := make([]chan *Tuple, len(o.consumes))
+		for i := 0; i < len(o.consumes); i++ {
+			consumerChans[i] = make(chan *Tuple)
+			o.consumes[i].AddConsumer(o.name, consumerChans[i])
+		}
 
 		var outputCollector *OutputCollector
 		if o.produces != nil {
@@ -90,9 +93,18 @@ func (t *Topology) Run(ctx context.Context) error {
 			outputCollector: outputCollector,
 		}
 		go func(ctx context.Context, o *OperatorSpec, opCtx *OperatorContext) {
-			for tuple := range consumerChan {
-				o.process(ctx, opCtx, tuple)
+			var consumerWg sync.WaitGroup
+			consumerWg.Add(len(consumerChans))
+			for port, consumerChan := range consumerChans {
+				go func(consumerChan <-chan *Tuple, port int) {
+					for tuple := range consumerChan {
+						o.process(ctx, opCtx, tuple, port)
+					}
+					consumerWg.Done()
+				}(consumerChan, port)
 			}
+			consumerWg.Wait()
+
 			if opCtx.outputCollector != nil {
 				close(opCtx.outputCollector.output)
 			}
@@ -117,7 +129,7 @@ type OperatorSpec struct {
 	parallelism int
 
 	produces *Stream
-	consumes *Stream
+	consumes []*Stream
 }
 
 func (o *OperatorSpec) Produces(streams *Stream) *OperatorSpec {
@@ -125,7 +137,7 @@ func (o *OperatorSpec) Produces(streams *Stream) *OperatorSpec {
 	return o
 }
 
-func (o *OperatorSpec) Consumes(streams *Stream) *OperatorSpec {
+func (o *OperatorSpec) Consumes(streams ...*Stream) *OperatorSpec {
 	o.consumes = streams
 	return o
 }
