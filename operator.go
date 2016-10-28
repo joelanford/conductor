@@ -15,8 +15,8 @@ func (o *OperatorContext) OutputCollector() *OutputCollector {
 	return o.outputCollector
 }
 
-type ProcessFunc func(context.Context, *OperatorContext)
-type ProcessTupleFunc func(context.Context, *OperatorContext, *Tuple, int)
+type ProcessFunc func(ctx context.Context, opCtx OperatorContext, instance int)
+type ProcessTupleFunc func(ctx context.Context, opCtx OperatorContext, tuple Tuple, instance int)
 
 type OutputCollector struct {
 	metadata []*TupleMetadata
