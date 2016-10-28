@@ -2,10 +2,12 @@ package conductor
 
 import (
 	"context"
-	"fmt"
 	"sync"
 )
 
+// Topology is the top-level entry point of Conductor.  It is used to create
+// stream processing pipelines consisting of SourceOperator and Operator
+// instances connected by Stream instances.
 type Topology struct {
 	name            string
 	sourceOperators []*SourceOperator
@@ -13,6 +15,7 @@ type Topology struct {
 	streams         map[string]*Stream
 }
 
+// NewTopology creates a new Topology instance
 func NewTopology(name string) *Topology {
 	return &Topology{
 		name:            name,
@@ -22,6 +25,9 @@ func NewTopology(name string) *Topology {
 	}
 }
 
+// AddSourceOperator creates and adds a new SourceOperator instance to the
+// topology. This function returns a SourceOperator instance, which is used
+// to declare the streams that the SourceOperator instance produces.
 func (t *Topology) AddSourceOperator(name string, process ProcessFunc, parallelism int) *SourceOperator {
 	o := &SourceOperator{
 		name:        name,
@@ -32,6 +38,9 @@ func (t *Topology) AddSourceOperator(name string, process ProcessFunc, paralleli
 	return o
 }
 
+// AddOperator creates and adds a new Operator instance to the topology. This
+// function returns an Operator instance, which is used to declare the streams
+// that the Operator instance consumes and produces.
 func (t *Topology) AddOperator(name string, process ProcessTupleFunc, parallelism int) *Operator {
 	o := &Operator{
 		name:        name,
@@ -42,55 +51,24 @@ func (t *Topology) AddOperator(name string, process ProcessTupleFunc, parallelis
 	return o
 }
 
+// Run executes the Topology instance.  This function should only be called
+// after all SourceOperator and Operator intances have been added and have had
+// their streams declared.  This function should not be called concurrently
+// for the same Topology instance. The passed in context can be used to cancel
+// the Topology before all SourceOperators have completed.
 func (t *Topology) Run(ctx context.Context) error {
+	// This WaitGroup is used to wait for all operators and streams to complete
+	// before returning from this function.
 	var wg sync.WaitGroup
 
-	wg.Add(len(t.sourceOperators))
-	for _, o := range t.sourceOperators {
-		producerChans := make([]chan *Tuple, len(o.produces))
-		for i, p := range o.produces {
-			producerChans[i] = make(chan *Tuple)
-			p.addProducer(o.name, producerChans[i])
-			if _, ok := t.streams[p.name]; !ok {
-				t.streams[p.name] = p
-			}
-		}
-		go func(o *SourceOperator) {
-			o.run(ctx, t, producerChans)
-			for _, output := range producerChans {
-				close(output)
-			}
-			wg.Done()
-		}(o)
-	}
+	// It is very important that all stream channels are created and added to
+	// the streams before starting the stream. Otherwise the stream will not
+	// receive all upstream tuples sent to it or it will not properly forward
+	// tuples to all consumers. It can also cause deadlocks and other
+	// unintended consequences.
+	t.setupStreams()
 
-	wg.Add(len(t.operators))
-	for _, o := range t.operators {
-		inputPorts := make([]*inputPort, len(o.consumes))
-		for i, c := range o.consumes {
-			consumerChan := make(chan *Tuple)
-			c.addConsumer(o.name, consumerChan)
-
-			// TODO: make partitioner and queue size configurable through topology API
-			inputPorts[i] = newInputPort(consumerChan, o.parallelism, &RoundRobinPartitioner{}, 1000)
-		}
-		producerChans := make([]chan *Tuple, len(o.produces))
-		for i, p := range o.produces {
-			producerChans[i] = make(chan *Tuple)
-			p.addProducer(o.name, producerChans[i])
-			if _, ok := t.streams[p.name]; !ok {
-				t.streams[p.name] = p
-			}
-		}
-		go func(o *Operator) {
-			o.run(ctx, t, producerChans, inputPorts)
-			for _, output := range producerChans {
-				close(output)
-			}
-			wg.Done()
-		}(o)
-	}
-
+	// Run all of the streams
 	wg.Add(len(t.streams))
 	for _, s := range t.streams {
 		go func(s *Stream) {
@@ -98,97 +76,49 @@ func (t *Topology) Run(ctx context.Context) error {
 			wg.Done()
 		}(s)
 	}
+
+	// Run all of the source operators
+	wg.Add(len(t.sourceOperators))
+	for _, o := range t.sourceOperators {
+		go func(o *SourceOperator) {
+			o.run(ctx)
+			wg.Done()
+		}(o)
+	}
+
+	// Run all of the operators
+	wg.Add(len(t.operators))
+	for _, o := range t.operators {
+		go func(o *Operator) {
+			o.run(ctx)
+			wg.Done()
+		}(o)
+	}
+
+	// Wait for all streams, source operators, and operators to complete.
 	wg.Wait()
 	return nil
 }
 
-type Operator struct {
-	name        string
-	process     ProcessTupleFunc
-	parallelism int
-
-	produces []*Stream
-	consumes []*Stream
-}
-
-func (o *Operator) Produces(streams ...*Stream) *Operator {
-	o.produces = streams
-	return o
-}
-
-func (o *Operator) Consumes(streams ...*Stream) *Operator {
-	o.consumes = streams
-	return o
-}
-
-func (o *Operator) run(ctx context.Context, t *Topology, producerChans []chan *Tuple, inputPorts []*inputPort) {
-	var wg sync.WaitGroup
-	wg.Add(len(inputPorts) * (o.parallelism + 1))
-	for portNum, ip := range inputPorts {
-		go func(ip *inputPort) {
-			ip.run()
-			wg.Done()
-		}(ip)
-		for instance := 0; instance < o.parallelism; instance++ {
-			go func(ip *inputPort, portNum int, instance int) {
-				opCtx := &OperatorContext{
-					name: fmt.Sprintf("%s[%d]", o.name, instance),
-					outputCollector: &OutputCollector{
-						metadata: []*TupleMetadata{},
-						outputs:  producerChans,
-					},
-				}
-				for _, p := range o.produces {
-					opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
-						Producer:   opCtx.name,
-						StreamName: p.name,
-					})
-				}
-				for tuple := range ip.getOutput(instance) {
-					o.process(ctx, *opCtx, *tuple, portNum)
-				}
-				wg.Done()
-			}(ip, portNum, instance)
+func (t *Topology) setupStreams() {
+	for _, o := range t.sourceOperators {
+		for _, p := range o.produces {
+			p.addProducer(o.name, make(chan *Tuple))
+			if _, ok := t.streams[p.name]; !ok {
+				t.streams[p.name] = p
+			}
 		}
 	}
-	wg.Wait()
-}
 
-type SourceOperator struct {
-	name        string
-	process     ProcessFunc
-	parallelism int
-
-	produces []*Stream
-}
-
-func (o *SourceOperator) Produces(streams ...*Stream) *SourceOperator {
-	o.produces = streams
-	return o
-}
-
-func (o *SourceOperator) run(ctx context.Context, t *Topology, producerChans []chan *Tuple) {
-	var wg sync.WaitGroup
-	wg.Add(o.parallelism)
-	for instance := 0; instance < o.parallelism; instance++ {
-		go func(ctx context.Context, o *SourceOperator, instance int) {
-			opCtx := &OperatorContext{
-				name: fmt.Sprintf("%s[%d]", o.name, instance),
-				outputCollector: &OutputCollector{
-					metadata: []*TupleMetadata{},
-					outputs:  producerChans,
-				},
+	for _, o := range t.operators {
+		for _, p := range o.produces {
+			p.addProducer(o.name, make(chan *Tuple))
+			if _, ok := t.streams[p.name]; !ok {
+				t.streams[p.name] = p
 			}
-			for _, p := range o.produces {
-				opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
-					Producer:   opCtx.name,
-					StreamName: p.name,
-				})
-			}
-			o.process(ctx, *opCtx, instance)
-			wg.Done()
-		}(ctx, o, instance)
+		}
+		for _, c := range o.consumes {
+			c.addConsumer(o.name, make(chan *Tuple))
+		}
 	}
-
-	wg.Wait()
 }

@@ -13,34 +13,55 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+// Partitioner is used to define how tuples are distributed to parallel
+// instances running within an operator.
 type Partitioner interface {
+	// Partition returns an integer that determines the parallel instance
+	// that will receive the given Tuple. The returned integer is modulo'd with
+	// the parallelism of the operator to direct the tuple to the correct
+	// parallel instance.
 	Partition(*Tuple) int
 }
 
+// RoundRobinPartitioner is a Partitioner implementation that sends tuples
+// to parallel operator instances in order of their index in increasing order.
 type RoundRobinPartitioner struct {
 	i int
 }
 
+// Partition increments a counter and returns it to perform a simple
+// round-robin paritioning scheme.
 func (p *RoundRobinPartitioner) Partition(t *Tuple) int {
 	rr := p.i
 	p.i++
 	return rr
 }
 
+// RandomPartitioner is a Partitioner implemetation that sends tuples to random
+// parallel operator instances, using Go's builtin rand package.
 type RandomPartitioner struct{}
 
+// Partition returns a random integer to perform a random partitioning scheme.
 func (p *RandomPartitioner) Partition(t *Tuple) int {
 	return rand.Intn(math.MaxInt64)
 }
 
+// HashPartitioner is a Partitioner implementation that sends tuples to
+// parallel operator instances based on the computed hash of the values of a
+// user-defined set of fields.
 type HashPartitioner struct {
 	fieldNames []string
 }
 
+// NewHashPartitioner creates a new HashPartitioner instance with the given
+// fieldNames, which are used to compute a hash for their values.
 func NewHashPartitioner(fieldNames ...string) *HashPartitioner {
 	return &HashPartitioner{fieldNames: fieldNames}
 }
 
+// Partition computes a hash value (using FNV) by creating a new map containing
+// the values of the defined fields, gob-encoding the map, and then computing
+// and returning the FNV hash of the gob-encoded bytes.
 func (p *HashPartitioner) Partition(t *Tuple) int {
 	fields := make([]interface{}, len(p.fieldNames))
 	for i, name := range p.fieldNames {
