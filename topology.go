@@ -7,53 +7,58 @@ import (
 )
 
 type Topology struct {
-	name                string
-	sourceOperatorSpecs []*SourceOperatorSpec
-	operatorSpecs       []*OperatorSpec
+	name            string
+	sourceOperators []*SourceOperator
+	operators       []*Operator
+	streams         map[string]*Stream
 }
 
 func NewTopology(name string) *Topology {
-	return &Topology{name: name}
+	return &Topology{
+		name:            name,
+		sourceOperators: make([]*SourceOperator, 0),
+		operators:       make([]*Operator, 0),
+		streams:         make(map[string]*Stream),
+	}
 }
 
-func (t *Topology) AddSourceOperator(name string, process ProcessFunc, parallelism int) *SourceOperatorSpec {
-	o := &SourceOperatorSpec{
+func (t *Topology) AddSourceOperator(name string, process ProcessFunc, parallelism int) *SourceOperator {
+	o := &SourceOperator{
 		name:        name,
 		process:     process,
 		parallelism: parallelism,
 	}
-	t.sourceOperatorSpecs = append(t.sourceOperatorSpecs, o)
+	t.sourceOperators = append(t.sourceOperators, o)
 	return o
 }
 
-func (t *Topology) AddOperator(name string, process ProcessTupleFunc, parallelism int) *OperatorSpec {
-	o := &OperatorSpec{
+func (t *Topology) AddOperator(name string, process ProcessTupleFunc, parallelism int) *Operator {
+	o := &Operator{
 		name:        name,
 		process:     process,
 		parallelism: parallelism,
 	}
-	t.operatorSpecs = append(t.operatorSpecs, o)
+	t.operators = append(t.operators, o)
 	return o
 }
 
 func (t *Topology) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 
-	streams := make(map[string]*Stream)
-	wg.Add(len(t.sourceOperatorSpecs))
-	for _, o := range t.sourceOperatorSpecs {
+	wg.Add(len(t.sourceOperators))
+	for _, o := range t.sourceOperators {
 		producerChans := make([]chan *Tuple, len(o.produces))
 		for i, p := range o.produces {
 			producerChans[i] = make(chan *Tuple)
-			if _, ok := streams[p.name]; !ok {
-				streams[p.name] = p
+			if _, ok := t.streams[p.name]; !ok {
+				t.streams[p.name] = p
 			}
 			p.AddProducer(o.name, producerChans[i])
 		}
 		var producerWg sync.WaitGroup
 		producerWg.Add(o.parallelism)
 		for instance := 0; instance < o.parallelism; instance++ {
-			go func(ctx context.Context, o *SourceOperatorSpec, instance int) {
+			go func(ctx context.Context, o *SourceOperator, instance int) {
 				opCtx := &OperatorContext{
 					name: fmt.Sprintf("%s[%d]", o.name, instance),
 					outputCollector: &OutputCollector{
@@ -80,8 +85,8 @@ func (t *Topology) Run(ctx context.Context) error {
 		}()
 	}
 
-	wg.Add(len(t.operatorSpecs))
-	for _, o := range t.operatorSpecs {
+	wg.Add(len(t.operators))
+	for _, o := range t.operators {
 		inputPorts := make([]*InputPort, len(o.consumes))
 		for i, c := range o.consumes {
 			consumerChan := make(chan *Tuple)
@@ -94,13 +99,13 @@ func (t *Topology) Run(ctx context.Context) error {
 		producerChans := make([]chan *Tuple, len(o.produces))
 		for i, p := range o.produces {
 			producerChans[i] = make(chan *Tuple)
-			if _, ok := streams[p.name]; !ok {
-				streams[p.name] = p
+			if _, ok := t.streams[p.name]; !ok {
+				t.streams[p.name] = p
 			}
 			p.AddProducer(o.name, producerChans[i])
 		}
 
-		go func(ctx context.Context, o *OperatorSpec) {
+		go func(ctx context.Context, o *Operator) {
 			var consumerWg sync.WaitGroup
 			consumerWg.Add(len(inputPorts) * o.parallelism)
 			for portNum, inputPort := range inputPorts {
@@ -135,18 +140,18 @@ func (t *Topology) Run(ctx context.Context) error {
 		}(ctx, o)
 	}
 
-	wg.Add(len(streams))
-	for _, stream := range streams {
+	wg.Add(len(t.streams))
+	for _, s := range t.streams {
 		go func(s *Stream) {
 			s.Run()
 			wg.Done()
-		}(stream)
+		}(s)
 	}
 	wg.Wait()
 	return nil
 }
 
-type OperatorSpec struct {
+type Operator struct {
 	name        string
 	process     ProcessTupleFunc
 	parallelism int
@@ -155,17 +160,17 @@ type OperatorSpec struct {
 	consumes []*Stream
 }
 
-func (o *OperatorSpec) Produces(streams ...*Stream) *OperatorSpec {
+func (o *Operator) Produces(streams ...*Stream) *Operator {
 	o.produces = streams
 	return o
 }
 
-func (o *OperatorSpec) Consumes(streams ...*Stream) *OperatorSpec {
+func (o *Operator) Consumes(streams ...*Stream) *Operator {
 	o.consumes = streams
 	return o
 }
 
-type SourceOperatorSpec struct {
+type SourceOperator struct {
 	name        string
 	process     ProcessFunc
 	parallelism int
@@ -173,7 +178,7 @@ type SourceOperatorSpec struct {
 	produces []*Stream
 }
 
-func (o *SourceOperatorSpec) Produces(streams ...*Stream) *SourceOperatorSpec {
+func (o *SourceOperator) Produces(streams ...*Stream) *SourceOperator {
 	o.produces = streams
 	return o
 }
