@@ -50,39 +50,18 @@ func (t *Topology) Run(ctx context.Context) error {
 		producerChans := make([]chan *Tuple, len(o.produces))
 		for i, p := range o.produces {
 			producerChans[i] = make(chan *Tuple)
+			p.AddProducer(o.name, producerChans[i])
 			if _, ok := t.streams[p.name]; !ok {
 				t.streams[p.name] = p
 			}
-			p.AddProducer(o.name, producerChans[i])
 		}
-		var producerWg sync.WaitGroup
-		producerWg.Add(o.parallelism)
-		for instance := 0; instance < o.parallelism; instance++ {
-			go func(ctx context.Context, o *SourceOperator, instance int) {
-				opCtx := &OperatorContext{
-					name: fmt.Sprintf("%s[%d]", o.name, instance),
-					outputCollector: &OutputCollector{
-						metadata: []*TupleMetadata{},
-						outputs:  producerChans,
-					},
-				}
-				for _, p := range o.produces {
-					opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
-						Producer:   opCtx.name,
-						StreamName: p.name,
-					})
-				}
-				o.process(ctx, *opCtx, instance)
-				producerWg.Done()
-			}(ctx, o, instance)
-		}
-		go func() {
-			producerWg.Wait()
+		go func(o *SourceOperator) {
+			o.Run(ctx, t, producerChans)
 			for _, output := range producerChans {
 				close(output)
 			}
 			wg.Done()
-		}()
+		}(o)
 	}
 
 	wg.Add(len(t.operators))
@@ -95,49 +74,21 @@ func (t *Topology) Run(ctx context.Context) error {
 			// TODO: make partitioner and queue size configurable through topology API
 			inputPorts[i] = NewInputPort(consumerChan, o.parallelism, &RoundRobinPartitioner{}, 1000)
 		}
-
 		producerChans := make([]chan *Tuple, len(o.produces))
 		for i, p := range o.produces {
 			producerChans[i] = make(chan *Tuple)
+			p.AddProducer(o.name, producerChans[i])
 			if _, ok := t.streams[p.name]; !ok {
 				t.streams[p.name] = p
 			}
-			p.AddProducer(o.name, producerChans[i])
 		}
-
-		go func(ctx context.Context, o *Operator) {
-			var consumerWg sync.WaitGroup
-			consumerWg.Add(len(inputPorts) * o.parallelism)
-			for portNum, inputPort := range inputPorts {
-				go inputPort.Run()
-				for instance := 0; instance < o.parallelism; instance++ {
-					go func(inputPort *InputPort, portNum int, instance int) {
-						opCtx := &OperatorContext{
-							name: fmt.Sprintf("%s[%d]", o.name, instance),
-							outputCollector: &OutputCollector{
-								metadata: []*TupleMetadata{},
-								outputs:  producerChans,
-							},
-						}
-						for _, p := range o.produces {
-							opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
-								Producer:   opCtx.name,
-								StreamName: p.name,
-							})
-						}
-						for tuple := range inputPort.GetOutput(instance) {
-							o.process(ctx, *opCtx, *tuple, portNum)
-						}
-						consumerWg.Done()
-					}(inputPort, portNum, instance)
-				}
-			}
-			consumerWg.Wait()
+		go func(o *Operator) {
+			o.Run(ctx, t, producerChans, inputPorts)
 			for _, output := range producerChans {
 				close(output)
 			}
 			wg.Done()
-		}(ctx, o)
+		}(o)
 	}
 
 	wg.Add(len(t.streams))
@@ -170,6 +121,39 @@ func (o *Operator) Consumes(streams ...*Stream) *Operator {
 	return o
 }
 
+func (o *Operator) Run(ctx context.Context, t *Topology, producerChans []chan *Tuple, inputPorts []*InputPort) {
+	var wg sync.WaitGroup
+	wg.Add(len(inputPorts) * (o.parallelism + 1))
+	for portNum, inputPort := range inputPorts {
+		go func(inputPort *InputPort) {
+			inputPort.Run()
+			wg.Done()
+		}(inputPort)
+		for instance := 0; instance < o.parallelism; instance++ {
+			go func(inputPort *InputPort, portNum int, instance int) {
+				opCtx := &OperatorContext{
+					name: fmt.Sprintf("%s[%d]", o.name, instance),
+					outputCollector: &OutputCollector{
+						metadata: []*TupleMetadata{},
+						outputs:  producerChans,
+					},
+				}
+				for _, p := range o.produces {
+					opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
+						Producer:   opCtx.name,
+						StreamName: p.name,
+					})
+				}
+				for tuple := range inputPort.GetOutput(instance) {
+					o.process(ctx, *opCtx, *tuple, portNum)
+				}
+				wg.Done()
+			}(inputPort, portNum, instance)
+		}
+	}
+	wg.Wait()
+}
+
 type SourceOperator struct {
 	name        string
 	process     ProcessFunc
@@ -181,4 +165,30 @@ type SourceOperator struct {
 func (o *SourceOperator) Produces(streams ...*Stream) *SourceOperator {
 	o.produces = streams
 	return o
+}
+
+func (o *SourceOperator) Run(ctx context.Context, t *Topology, producerChans []chan *Tuple) {
+	var wg sync.WaitGroup
+	wg.Add(o.parallelism)
+	for instance := 0; instance < o.parallelism; instance++ {
+		go func(ctx context.Context, o *SourceOperator, instance int) {
+			opCtx := &OperatorContext{
+				name: fmt.Sprintf("%s[%d]", o.name, instance),
+				outputCollector: &OutputCollector{
+					metadata: []*TupleMetadata{},
+					outputs:  producerChans,
+				},
+			}
+			for _, p := range o.produces {
+				opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
+					Producer:   opCtx.name,
+					StreamName: p.name,
+				})
+			}
+			o.process(ctx, *opCtx, instance)
+			wg.Done()
+		}(ctx, o, instance)
+	}
+
+	wg.Wait()
 }
