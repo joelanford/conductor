@@ -13,12 +13,12 @@ func TestStreamOneToMany(t *testing.T) {
 		s := NewStream("test")
 
 		p1 := make(chan *Tuple, i)
-		s.AddProducer("p1", p1)
+		s.addProducer("p1", p1)
 
 		c := make([]chan *Tuple, i)
 		for j := 0; j < i; j++ {
 			c[j] = make(chan *Tuple, i)
-			s.AddConsumer(fmt.Sprintf("c%d", j), c[j])
+			s.addConsumer(fmt.Sprintf("c%d", j), c[j])
 		}
 
 		tuples := make([]*Tuple, i)
@@ -45,7 +45,7 @@ func TestStreamOneToMany(t *testing.T) {
 				wg.Done()
 			}(j)
 		}
-		s.Run()
+		s.run()
 		wg.Wait()
 	}
 }
@@ -57,11 +57,11 @@ func TestStreamManyToOne(t *testing.T) {
 		p := make([]chan *Tuple, i)
 		for j := 0; j < i; j++ {
 			p[j] = make(chan *Tuple, i)
-			s.AddProducer(fmt.Sprintf("p%d", j), p[j])
+			s.addProducer(fmt.Sprintf("p%d", j), p[j])
 		}
 
 		c := make(chan *Tuple, i)
-		s.AddConsumer("c", c)
+		s.addConsumer("c", c)
 
 		tuples := make([]*Tuple, i)
 		for j := 0; j < i; j++ {
@@ -92,7 +92,7 @@ func TestStreamManyToOne(t *testing.T) {
 			wg.Done()
 		}()
 
-		s.Run()
+		s.run()
 		wg.Wait()
 	}
 }
@@ -104,10 +104,10 @@ func TestStream(t *testing.T) {
 	c2 := make(chan *Tuple, 1)
 
 	s := NewStream("test")
-	s.AddProducer("p1", p1)
-	s.AddProducer("p2", p2)
-	s.AddConsumer("c1", c1)
-	s.AddConsumer("c2", c2)
+	s.addProducer("p1", p1)
+	s.addProducer("p2", p2)
+	s.addConsumer("c1", c1)
+	s.addConsumer("c2", c2)
 
 	t1 := &Tuple{Data: map[string]interface{}{"foo": "bar"}}
 	t2 := &Tuple{Data: map[string]interface{}{"whiz": "bang"}}
@@ -119,7 +119,7 @@ func TestStream(t *testing.T) {
 	t1Wg.Add(2)
 	t2Wg.Add(2)
 	go func() {
-		s.Run()
+		s.run()
 		runWg.Done()
 	}()
 	go func() {

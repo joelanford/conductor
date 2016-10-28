@@ -50,13 +50,13 @@ func (t *Topology) Run(ctx context.Context) error {
 		producerChans := make([]chan *Tuple, len(o.produces))
 		for i, p := range o.produces {
 			producerChans[i] = make(chan *Tuple)
-			p.AddProducer(o.name, producerChans[i])
+			p.addProducer(o.name, producerChans[i])
 			if _, ok := t.streams[p.name]; !ok {
 				t.streams[p.name] = p
 			}
 		}
 		go func(o *SourceOperator) {
-			o.Run(ctx, t, producerChans)
+			o.run(ctx, t, producerChans)
 			for _, output := range producerChans {
 				close(output)
 			}
@@ -66,24 +66,24 @@ func (t *Topology) Run(ctx context.Context) error {
 
 	wg.Add(len(t.operators))
 	for _, o := range t.operators {
-		inputPorts := make([]*InputPort, len(o.consumes))
+		inputPorts := make([]*inputPort, len(o.consumes))
 		for i, c := range o.consumes {
 			consumerChan := make(chan *Tuple)
-			c.AddConsumer(o.name, consumerChan)
+			c.addConsumer(o.name, consumerChan)
 
 			// TODO: make partitioner and queue size configurable through topology API
-			inputPorts[i] = NewInputPort(consumerChan, o.parallelism, &RoundRobinPartitioner{}, 1000)
+			inputPorts[i] = newInputPort(consumerChan, o.parallelism, &RoundRobinPartitioner{}, 1000)
 		}
 		producerChans := make([]chan *Tuple, len(o.produces))
 		for i, p := range o.produces {
 			producerChans[i] = make(chan *Tuple)
-			p.AddProducer(o.name, producerChans[i])
+			p.addProducer(o.name, producerChans[i])
 			if _, ok := t.streams[p.name]; !ok {
 				t.streams[p.name] = p
 			}
 		}
 		go func(o *Operator) {
-			o.Run(ctx, t, producerChans, inputPorts)
+			o.run(ctx, t, producerChans, inputPorts)
 			for _, output := range producerChans {
 				close(output)
 			}
@@ -94,7 +94,7 @@ func (t *Topology) Run(ctx context.Context) error {
 	wg.Add(len(t.streams))
 	for _, s := range t.streams {
 		go func(s *Stream) {
-			s.Run()
+			s.run()
 			wg.Done()
 		}(s)
 	}
@@ -121,16 +121,16 @@ func (o *Operator) Consumes(streams ...*Stream) *Operator {
 	return o
 }
 
-func (o *Operator) Run(ctx context.Context, t *Topology, producerChans []chan *Tuple, inputPorts []*InputPort) {
+func (o *Operator) run(ctx context.Context, t *Topology, producerChans []chan *Tuple, inputPorts []*inputPort) {
 	var wg sync.WaitGroup
 	wg.Add(len(inputPorts) * (o.parallelism + 1))
-	for portNum, inputPort := range inputPorts {
-		go func(inputPort *InputPort) {
-			inputPort.Run()
+	for portNum, ip := range inputPorts {
+		go func(ip *inputPort) {
+			ip.run()
 			wg.Done()
-		}(inputPort)
+		}(ip)
 		for instance := 0; instance < o.parallelism; instance++ {
-			go func(inputPort *InputPort, portNum int, instance int) {
+			go func(ip *inputPort, portNum int, instance int) {
 				opCtx := &OperatorContext{
 					name: fmt.Sprintf("%s[%d]", o.name, instance),
 					outputCollector: &OutputCollector{
@@ -144,11 +144,11 @@ func (o *Operator) Run(ctx context.Context, t *Topology, producerChans []chan *T
 						StreamName: p.name,
 					})
 				}
-				for tuple := range inputPort.GetOutput(instance) {
+				for tuple := range ip.getOutput(instance) {
 					o.process(ctx, *opCtx, *tuple, portNum)
 				}
 				wg.Done()
-			}(inputPort, portNum, instance)
+			}(ip, portNum, instance)
 		}
 	}
 	wg.Wait()
@@ -167,7 +167,7 @@ func (o *SourceOperator) Produces(streams ...*Stream) *SourceOperator {
 	return o
 }
 
-func (o *SourceOperator) Run(ctx context.Context, t *Topology, producerChans []chan *Tuple) {
+func (o *SourceOperator) run(ctx context.Context, t *Topology, producerChans []chan *Tuple) {
 	var wg sync.WaitGroup
 	wg.Add(o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {

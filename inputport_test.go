@@ -100,31 +100,31 @@ func BenchmarkHashPartitioner(b *testing.B) {
 func TestInputPortRoundRobinNoOverflow(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		input := make(chan *Tuple, i)
-		ip := NewInputPort(input, i, &RoundRobinPartitioner{}, i)
+		ip := newInputPort(input, i, &RoundRobinPartitioner{}, i)
 		go func() {
 			for j := 0; j < i; j++ {
 				in := &Tuple{Data: map[string]interface{}{"value": i}}
 				input <- in
-				out := <-ip.GetOutput(j)
+				out := <-ip.getOutput(j)
 				assert.Equal(t, in, out)
 			}
 			close(input)
 		}()
-		ip.Run()
+		ip.run()
 	}
 }
 
 func TestInputPortRoundRobinOverflow(t *testing.T) {
 	input := make(chan *Tuple, 1)
-	ip := NewInputPort(input, 4, &RoundRobinPartitioner{}, 100)
+	ip := newInputPort(input, 4, &RoundRobinPartitioner{}, 100)
 	go func() {
 		for j := 0; j < 100; j++ {
 			in := &Tuple{Data: map[string]interface{}{"value": j}}
 			input <- in
-			out := <-ip.GetOutput(j % 4)
+			out := <-ip.getOutput(j % 4)
 			assert.Equal(t, in, out)
 		}
 		close(input)
 	}()
-	ip.Run()
+	ip.run()
 }

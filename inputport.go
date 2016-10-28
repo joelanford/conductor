@@ -54,25 +54,25 @@ func (p *HashPartitioner) Partition(t *Tuple) int {
 	return int(h.Sum32())
 }
 
-type InputPort struct {
+type inputPort struct {
 	input       <-chan *Tuple
 	outputs     []chan *Tuple
 	partitioner Partitioner
 }
 
-func NewInputPort(input <-chan *Tuple, parallelism int, partitioner Partitioner, queueSize int) *InputPort {
+func newInputPort(input <-chan *Tuple, parallelism int, partitioner Partitioner, queueSize int) *inputPort {
 	outputs := make([]chan *Tuple, parallelism)
 	for i := 0; i < parallelism; i++ {
 		outputs[i] = make(chan *Tuple, queueSize)
 	}
-	return &InputPort{
+	return &inputPort{
 		input:       input,
 		outputs:     outputs,
 		partitioner: partitioner,
 	}
 }
 
-func (i *InputPort) Run() {
+func (i *inputPort) run() {
 	for t := range i.input {
 		i.outputs[i.partitioner.Partition(t)%len(i.outputs)] <- t
 	}
@@ -81,6 +81,6 @@ func (i *InputPort) Run() {
 	}
 }
 
-func (i *InputPort) GetOutput(o int) <-chan *Tuple {
+func (i *inputPort) getOutput(o int) <-chan *Tuple {
 	return i.outputs[o]
 }

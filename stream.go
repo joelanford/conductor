@@ -33,7 +33,7 @@ func NewStream(name string) *Stream {
 // registered with a Stream will be closed by the Stream when the Stream producers
 // are all closed.  If the consumer stream registered is closed elsewhere, the program
 // may panic while attempting to write to a closed channel.
-func (s *Stream) AddConsumer(name string, consumer chan<- *Tuple) error {
+func (s *Stream) addConsumer(name string, consumer chan<- *Tuple) error {
 	if _, present := s.consumers[name]; present {
 		return errors.Errorf("cannot overwrite consumer with name %s", name)
 	}
@@ -46,7 +46,7 @@ func (s *Stream) AddConsumer(name string, consumer chan<- *Tuple) error {
 // registered with a Stream should be closed externally to notify the stream that no
 // further tuples will be sent. If the producer stream registered is not closed, the program
 // may not exit cleanly with bounded data streams.
-func (s *Stream) AddProducer(name string, producer <-chan *Tuple) error {
+func (s *Stream) addProducer(name string, producer <-chan *Tuple) error {
 	if _, present := s.producers[name]; present {
 		return errors.Errorf("cannot overwrite producer with name %s", name)
 	}
@@ -54,7 +54,7 @@ func (s *Stream) AddProducer(name string, producer <-chan *Tuple) error {
 	return nil
 }
 
-func (s *Stream) Run() {
+func (s *Stream) run() {
 	for tuple := range s.mergeProducers() {
 		for _, c := range s.consumers {
 			c <- tuple
