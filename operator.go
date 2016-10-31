@@ -102,7 +102,7 @@ func (o *Operator) run(ctx context.Context) {
 
 	inputPorts := make([]*inputPort, len(o.consumes))
 	for i, c := range o.consumes {
-		inputPorts[i] = newInputPort(c.consumers[o.name], o.parallelism, &RoundRobinPartitioner{}, 1000)
+		inputPorts[i] = newInputPort(c.consumers[o.name], o.parallelism, PartitionRoundRobin(), 1000)
 	}
 
 	wg.Add(len(inputPorts) * (o.parallelism + 1))

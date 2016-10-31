@@ -12,18 +12,18 @@ import (
 // It iteratates 1000 times and verifies that the RoundRobinPartitioner
 // Partition() function returns incrementing integers.
 func TestRoundRobinPartitioner(t *testing.T) {
-	p := &RoundRobinPartitioner{}
+	p := PartitionRoundRobin()
 	tuple := &Tuple{}
 	for i := 0; i < 1000; i++ {
-		assert.Equal(t, i, p.Partition(tuple))
+		assert.Equal(t, i, p(tuple))
 	}
 }
 
 func BenchmarkRoundRobinPartitioner(b *testing.B) {
-	p := &RoundRobinPartitioner{}
+	p := PartitionRoundRobin()
 	tuple := &Tuple{}
 	for i := 0; i < b.N; i++ {
-		p.Partition(tuple)
+		p(tuple)
 	}
 }
 
@@ -38,21 +38,23 @@ func TestRandomPartitioner(t *testing.T) {
 		for j := int64(0); j < 1000; j++ {
 			vals[j] = rand.Intn(math.MaxInt64)
 		}
+		p := PartitionRandom()
+
+		// need to reset rand.Seed since PartitionRandom automatically changes the seed.
 		rand.Seed(i)
-		p := &RandomPartitioner{}
 		tuple := &Tuple{}
 		for j := int64(0); j < 1000; j++ {
-			assert.Equal(t, vals[j], p.Partition(tuple))
+			assert.Equal(t, vals[j], p(tuple))
 		}
 	}
 }
 
 func BenchmarkRandomPartitioner(b *testing.B) {
 	rand.Seed(1)
-	p := &RandomPartitioner{}
+	p := PartitionRandom()
 	tuple := &Tuple{}
 	for i := 0; i < b.N; i++ {
-		p.Partition(tuple)
+		p(tuple)
 	}
 }
 
@@ -69,16 +71,16 @@ func TestHashPartitioner(t *testing.T) {
 		&Tuple{Data: map[string]interface{}{"a": 1, "b": 3}},
 		&Tuple{Data: map[string]interface{}{"a": 1, "b": 4}},
 	}
-	pa := NewHashPartitioner("a")
-	pab := NewHashPartitioner("a", "b")
+	pa := PartitionHash("a")
+	pab := PartitionHash("a", "b")
 
 	for i := 0; i < 4; i++ {
 		for j := 0; j <= i; j++ {
-			assert.Equal(t, pa.Partition(tuples[i]), pa.Partition(tuples[j]))
+			assert.Equal(t, pa(tuples[i]), pa(tuples[j]))
 			if i == j {
-				assert.Equal(t, pab.Partition(tuples[i]), pab.Partition(tuples[j]))
+				assert.Equal(t, pab(tuples[i]), pab(tuples[j]))
 			} else {
-				assert.NotEqual(t, pab.Partition(tuples[i]), pab.Partition(tuples[j]))
+				assert.NotEqual(t, pab(tuples[i]), pab(tuples[j]))
 			}
 		}
 	}
@@ -91,16 +93,16 @@ func BenchmarkHashPartitioner(b *testing.B) {
 		&Tuple{Data: map[string]interface{}{"a": 1, "b": 3, "c": "This is a sentence that is a bit longer than the other \"c\" values"}},
 		&Tuple{Data: map[string]interface{}{"a": 1, "b": 4, "c": "1"}},
 	}
-	p := NewHashPartitioner("a", "b", "c", "d")
+	p := PartitionHash("a", "b", "c", "d")
 	for i := 0; i < b.N; i++ {
-		p.Partition(tuples[i%4])
+		p(tuples[i%4])
 	}
 }
 
 func TestInputPortRoundRobinNoOverflow(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		input := make(chan *Tuple, i)
-		ip := newInputPort(input, i, &RoundRobinPartitioner{}, i)
+		ip := newInputPort(input, i, PartitionRoundRobin(), i)
 		go func() {
 			for j := 0; j < i; j++ {
 				in := &Tuple{Data: map[string]interface{}{"value": i}}
@@ -116,7 +118,7 @@ func TestInputPortRoundRobinNoOverflow(t *testing.T) {
 
 func TestInputPortRoundRobinOverflow(t *testing.T) {
 	input := make(chan *Tuple, 1)
-	ip := newInputPort(input, 4, &RoundRobinPartitioner{}, 100)
+	ip := newInputPort(input, 4, PartitionRoundRobin(), 100)
 	go func() {
 		for j := 0; j < 100; j++ {
 			in := &Tuple{Data: map[string]interface{}{"value": j}}
