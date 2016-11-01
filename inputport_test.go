@@ -8,9 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestRoundRobinPartitioner tests the RoundRobinPartitioner implementation.
-// It iteratates 1000 times and verifies that the RoundRobinPartitioner
-// Partition() function returns incrementing integers.
 func TestRoundRobinPartitioner(t *testing.T) {
 	p := PartitionRoundRobin()
 	tuple := &Tuple{}
@@ -27,10 +24,6 @@ func BenchmarkRoundRobinPartitioner(b *testing.B) {
 	}
 }
 
-// TestRandomPartitioner tests the RandomPartitioner implementation with
-// 5 different seeds.  During each loop, it seeds the randomness, collects
-// 1000 random values, then reseeds the randomness and validates that the
-// RandomPartitioner Partition() function returns the same values.
 func TestRandomPartitioner(t *testing.T) {
 	for i := int64(1); i < 5; i++ {
 		rand.Seed(i)
@@ -58,12 +51,6 @@ func BenchmarkRandomPartitioner(b *testing.B) {
 	}
 }
 
-// TestHashPartitioner tests the HashPartitioner implementation. It test two
-// instances of the HashPartitioner with four tuples with "a" values that are
-// equal and "b" values that are not. The first HashPartitioner hashes only
-// the "a" values, so we expect Partition to return the same value for all
-// tuples.  The second HashPartitioner hashes both "a" and "b" values, so we
-// expect Partition to return different values for each tuple.
 func TestHashPartitioner(t *testing.T) {
 	tuples := []*Tuple{
 		&Tuple{Data: map[string]interface{}{"a": 1, "b": 1}},
@@ -101,32 +88,30 @@ func BenchmarkHashPartitioner(b *testing.B) {
 
 func TestInputPortRoundRobinNoOverflow(t *testing.T) {
 	for i := 1; i <= 100; i++ {
-		input := make(chan *Tuple, i)
-		ip := newInputPort(input, i, PartitionRoundRobin(), i)
+		ip := newInputPort(PartitionRoundRobin(), i, i)
 		go func() {
 			for j := 0; j < i; j++ {
 				in := &Tuple{Data: map[string]interface{}{"value": i}}
-				input <- in
-				out := <-ip.getOutput(j)
+				ip.input <- in
+				out := <-ip.outputs[j]
 				assert.Equal(t, in, out)
 			}
-			close(input)
+			close(ip.input)
 		}()
 		ip.run()
 	}
 }
 
 func TestInputPortRoundRobinOverflow(t *testing.T) {
-	input := make(chan *Tuple, 1)
-	ip := newInputPort(input, 4, PartitionRoundRobin(), 100)
+	ip := newInputPort(PartitionRoundRobin(), 4, 100)
 	go func() {
 		for j := 0; j < 100; j++ {
 			in := &Tuple{Data: map[string]interface{}{"value": j}}
-			input <- in
-			out := <-ip.getOutput(j % 4)
+			ip.input <- in
+			out := <-ip.outputs[j%4]
 			assert.Equal(t, in, out)
 		}
-		close(input)
+		close(ip.input)
 	}()
 	ip.run()
 }

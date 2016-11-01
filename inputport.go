@@ -18,9 +18,9 @@ import (
 // parallel instance.
 type PartitionFunc func(*Tuple) int
 
-// PartitionRoundRobinPartitioner implementats a round-robin partitioning
-// scheme that sends tuples to parallel operator instances in order of their
-// index in increasing order.
+// PartitionRoundRobin implements a round-robin partitioning scheme that sends
+// tuples to parallel operator instances in order of their index in increasing
+// order.
 func PartitionRoundRobin() PartitionFunc {
 	n := uint32(math.MaxUint32)
 	return func(t *Tuple) int {
@@ -29,9 +29,8 @@ func PartitionRoundRobin() PartitionFunc {
 	}
 }
 
-// PartitionRandom implemetations a random parititioning scheme that sends
-// tuples to random parallel operator instances, using Go's builtin math/rand
-// package.
+// PartitionRandom implements a random parititioning scheme that sends tuples
+// to random parallel operator instances, using Go's builtin math/rand package.
 func PartitionRandom() PartitionFunc {
 	rand.Seed(time.Now().UnixNano())
 	return func(t *Tuple) int {
@@ -39,18 +38,19 @@ func PartitionRandom() PartitionFunc {
 	}
 }
 
-// PartitionHash implements a partition scheme that sends tuples to parallel
+// PartitionHash implements a partitioning scheme that sends tuples to parallel
 // operator instances based on the computed hash of the values of a
 // user-defined set of fields.
 func PartitionHash(fieldNames ...string) PartitionFunc {
+	fields := make([]interface{}, len(fieldNames))
+	var buf bytes.Buffer
+
 	return func(t *Tuple) int {
-		fields := make([]interface{}, len(fieldNames))
 		for i, name := range fieldNames {
 			fields[i] = t.Data[name]
 		}
-		var buf bytes.Buffer
-		enc := gob.NewEncoder(&buf)
-		_ = enc.Encode(fields)
+		buf.Reset()
+		gob.NewEncoder(&buf).Encode(fields)
 		h := fnv.New32()
 		h.Write(buf.Bytes())
 		return int(h.Sum32())
@@ -58,18 +58,18 @@ func PartitionHash(fieldNames ...string) PartitionFunc {
 }
 
 type inputPort struct {
-	input     <-chan *Tuple
+	input     chan *Tuple
 	outputs   []chan *Tuple
 	partition PartitionFunc
 }
 
-func newInputPort(input <-chan *Tuple, parallelism int, partitionFunc PartitionFunc, queueSize int) *inputPort {
+func newInputPort(partitionFunc PartitionFunc, parallelism, queueSize int) *inputPort {
 	outputs := make([]chan *Tuple, parallelism)
 	for i := 0; i < parallelism; i++ {
 		outputs[i] = make(chan *Tuple, queueSize)
 	}
 	return &inputPort{
-		input:     input,
+		input:     make(chan *Tuple),
 		outputs:   outputs,
 		partition: partitionFunc,
 	}
@@ -82,8 +82,4 @@ func (i *inputPort) run() {
 	for _, o := range i.outputs {
 		close(o)
 	}
-}
-
-func (i *inputPort) getOutput(o int) <-chan *Tuple {
-	return i.outputs[o]
 }

@@ -5,7 +5,7 @@ package conductor
 // and Data, which contains user-defined data consumed and produced by
 // SourceOperator and Operator instances.
 type Tuple struct {
-	Metadata *TupleMetadata
+	Metadata TupleMetadata
 	Data     TupleData
 }
 
@@ -15,6 +15,7 @@ type Tuple struct {
 type TupleMetadata struct {
 	StreamName string
 	Producer   string
+	Instance   int
 }
 
 // TupleData is a member of the Tuple struct. It is a map of string keys which
