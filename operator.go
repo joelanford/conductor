@@ -3,6 +3,8 @@ package conductor
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"sync"
 )
 
@@ -11,6 +13,7 @@ import (
 type OperatorContext struct {
 	name            string
 	instance        int
+	log             InfoDebugLogger
 	outputCollector *OutputCollector
 }
 
@@ -27,6 +30,12 @@ func (o *OperatorContext) Instance() int {
 // operator. It is used to submit tuples to the operator's producer streams.
 func (o *OperatorContext) OutputCollector() *OutputCollector {
 	return o.outputCollector
+}
+
+// Log returns the InfoDebugLogger instance associated with the operator. It is
+// used to log informational and debug messages to the console.
+func (o *OperatorContext) Log() InfoDebugLogger {
+	return o.log
 }
 
 // ProcessFunc functions are defined when instantiating SourceOperator
@@ -78,6 +87,7 @@ type Operator struct {
 	name        string
 	process     ProcessTupleFunc
 	parallelism int
+	debug       bool
 
 	produces []*Stream
 	consumes []*Stream
@@ -94,6 +104,11 @@ func (o *Operator) Produces(streams ...*Stream) *Operator {
 // receive tuples from upstream consumers
 func (o *Operator) Consumes(streams ...*Stream) *Operator {
 	o.consumes = streams
+	return o
+}
+
+func (o *Operator) SetDebug(debug bool) *Operator {
+	o.debug = debug
 	return o
 }
 
@@ -117,11 +132,14 @@ func (o *Operator) run(ctx context.Context) {
 				opCtx := &OperatorContext{
 					name:     o.name,
 					instance: instance,
+					log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
 					outputCollector: &OutputCollector{
 						metadata: []*TupleMetadata{},
 						outputs:  []chan *Tuple{},
 					},
 				}
+				opCtx.log.SetDebug(o.debug)
+
 				for _, p := range o.produces {
 					opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
 						Producer:   fmt.Sprintf("%s[%d]", o.name, instance),
@@ -149,6 +167,7 @@ type SourceOperator struct {
 	name        string
 	process     ProcessFunc
 	parallelism int
+	debug       bool
 
 	produces []*Stream
 }
@@ -160,6 +179,11 @@ func (o *SourceOperator) Produces(streams ...*Stream) *SourceOperator {
 	return o
 }
 
+func (o *SourceOperator) SetDebug(debug bool) *SourceOperator {
+	o.debug = debug
+	return o
+}
+
 func (o *SourceOperator) run(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Add(o.parallelism)
@@ -168,11 +192,13 @@ func (o *SourceOperator) run(ctx context.Context) {
 			opCtx := &OperatorContext{
 				name:     o.name,
 				instance: instance,
+				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
 				outputCollector: &OutputCollector{
 					metadata: []*TupleMetadata{},
 					outputs:  []chan *Tuple{},
 				},
 			}
+			opCtx.log.SetDebug(o.debug)
 
 			for _, p := range o.produces {
 				opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{

@@ -13,6 +13,7 @@ type Topology struct {
 	sourceOperators []*SourceOperator
 	operators       []*Operator
 	streams         map[string]*Stream
+	debug           bool
 }
 
 // NewTopology creates a new Topology instance
@@ -22,6 +23,7 @@ func NewTopology(name string) *Topology {
 		sourceOperators: make([]*SourceOperator, 0),
 		operators:       make([]*Operator, 0),
 		streams:         make(map[string]*Stream),
+		debug:           false,
 	}
 }
 
@@ -33,6 +35,7 @@ func (t *Topology) AddSourceOperator(name string, process ProcessFunc, paralleli
 		name:        name,
 		process:     process,
 		parallelism: parallelism,
+		debug:       false,
 	}
 	t.sourceOperators = append(t.sourceOperators, o)
 	return o
@@ -46,6 +49,7 @@ func (t *Topology) AddOperator(name string, process ProcessTupleFunc, parallelis
 		name:        name,
 		process:     process,
 		parallelism: parallelism,
+		debug:       false,
 	}
 	t.operators = append(t.operators, o)
 	return o
@@ -81,6 +85,7 @@ func (t *Topology) Run(ctx context.Context) error {
 	wg.Add(len(t.sourceOperators))
 	for _, o := range t.sourceOperators {
 		go func(o *SourceOperator) {
+			o.debug = o.debug || t.debug
 			o.run(ctx)
 			wg.Done()
 		}(o)
@@ -90,6 +95,7 @@ func (t *Topology) Run(ctx context.Context) error {
 	wg.Add(len(t.operators))
 	for _, o := range t.operators {
 		go func(o *Operator) {
+			o.debug = o.debug || t.debug
 			o.run(ctx)
 			wg.Done()
 		}(o)
@@ -98,6 +104,11 @@ func (t *Topology) Run(ctx context.Context) error {
 	// Wait for all streams, source operators, and operators to complete.
 	wg.Wait()
 	return nil
+}
+
+func (t *Topology) SetDebug(debug bool) *Topology {
+	t.debug = debug
+	return t
 }
 
 func (t *Topology) setupStreams() {
