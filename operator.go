@@ -11,10 +11,11 @@ import (
 // OperatorContext is passed to user-defined ProcessFunc and ProcessTupleFunc
 // functions to provide the operator name and tuple submission functionality.
 type OperatorContext struct {
-	name            string
-	instance        int
-	log             InfoDebugLogger
-	outputCollector *OutputCollector
+	name     string
+	instance int
+	log      InfoDebugLogger
+	metadata []*TupleMetadata
+	outputs  []chan *Tuple
 }
 
 // Name returns the name of the operator
@@ -26,16 +27,25 @@ func (o *OperatorContext) Instance() int {
 	return o.instance
 }
 
-// OutputCollector returns the OutputCollector instance associated with the
-// operator. It is used to submit tuples to the operator's producer streams.
-func (o *OperatorContext) OutputCollector() *OutputCollector {
-	return o.outputCollector
-}
-
 // Log returns the InfoDebugLogger instance associated with the operator. It is
 // used to log informational and debug messages to the console.
 func (o *OperatorContext) Log() InfoDebugLogger {
 	return o.log
+}
+
+// Submit sends a tuple to the stream on the specified port. The port index
+// counts from 0 and corresponds to the order that streams were defined by the
+// SourceOperator or Operator instance's Produces() function. Submitting on
+// an undefined port will result in a panic.
+func (o *OperatorContext) Submit(t TupleData, port int) {
+	o.outputs[port] <- &Tuple{Metadata: o.metadata[port], Data: t}
+}
+
+// NumPorts returns the number of output ports defined in the topology. This
+// can be useful to enable a function supporting a configurable number of
+// producer streams.
+func (o *OperatorContext) NumPorts() int {
+	return len(o.outputs)
 }
 
 // ProcessFunc functions are defined when instantiating SourceOperator
@@ -57,29 +67,6 @@ type ProcessFunc func(ctx context.Context, opCtx OperatorContext)
 // functionality, and instance is the index of the Operator instance dictated
 // by the SourceOperator parallelism.
 type ProcessTupleFunc func(ctx context.Context, opCtx OperatorContext, tuple Tuple, instance int)
-
-// OutputCollector is used to submit tuples to the operator's producer streams.
-// It is passed via the OperatorContext to the user-defined ProcessFunc and
-// ProcessTupleFunc functions.
-type OutputCollector struct {
-	metadata []*TupleMetadata
-	outputs  []chan *Tuple
-}
-
-// Submit sends a tuple to the stream on the specified port. The port index
-// counts from 0 and corresponds to the order that streams were defined by the
-// SourceOperator or Operator instance's Produces() function. Submitting on
-// an undefined port will result in a panic.
-func (o *OutputCollector) Submit(t TupleData, port int) {
-	o.outputs[port] <- &Tuple{Metadata: o.metadata[port], Data: t}
-}
-
-// NumPorts returns the number of output ports defined in the topology. This
-// can be useful to enable a function supporting a configurable number of
-// producer streams.
-func (o *OutputCollector) NumPorts() int {
-	return len(o.outputs)
-}
 
 // Operator encapsulates the necessary information and functionality to perform
 // operations on a stream (or streams) of incoming tuples
@@ -133,19 +120,17 @@ func (o *Operator) run(ctx context.Context) {
 					name:     o.name,
 					instance: instance,
 					log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
-					outputCollector: &OutputCollector{
-						metadata: []*TupleMetadata{},
-						outputs:  []chan *Tuple{},
-					},
+					metadata: []*TupleMetadata{},
+					outputs:  []chan *Tuple{},
 				}
 				opCtx.log.SetDebug(o.debug)
 
 				for _, p := range o.produces {
-					opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
+					opCtx.metadata = append(opCtx.metadata, &TupleMetadata{
 						Producer:   fmt.Sprintf("%s[%d]", o.name, instance),
 						StreamName: p.name,
 					})
-					opCtx.outputCollector.outputs = append(opCtx.outputCollector.outputs, p.producers[o.name])
+					opCtx.outputs = append(opCtx.outputs, p.producers[o.name])
 				}
 				for tuple := range ip.getOutput(instance) {
 					o.process(ctx, *opCtx, *tuple, portNum)
@@ -193,19 +178,17 @@ func (o *SourceOperator) run(ctx context.Context) {
 				name:     o.name,
 				instance: instance,
 				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
-				outputCollector: &OutputCollector{
-					metadata: []*TupleMetadata{},
-					outputs:  []chan *Tuple{},
-				},
+				metadata: []*TupleMetadata{},
+				outputs:  []chan *Tuple{},
 			}
 			opCtx.log.SetDebug(o.debug)
 
 			for _, p := range o.produces {
-				opCtx.outputCollector.metadata = append(opCtx.outputCollector.metadata, &TupleMetadata{
+				opCtx.metadata = append(opCtx.metadata, &TupleMetadata{
 					Producer:   opCtx.name,
 					StreamName: p.name,
 				})
-				opCtx.outputCollector.outputs = append(opCtx.outputCollector.outputs, p.producers[o.name])
+				opCtx.outputs = append(opCtx.outputs, p.producers[o.name])
 			}
 			o.process(ctx, *opCtx)
 			wg.Done()
