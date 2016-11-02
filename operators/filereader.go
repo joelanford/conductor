@@ -8,8 +8,7 @@ import (
 )
 
 type FileReader struct {
-	oc       conductor.OperatorContext
-	instance int
+	oc conductor.OperatorContext
 }
 
 func NewFileReader() conductor.CreateBoltProcessorFunc {
@@ -18,9 +17,8 @@ func NewFileReader() conductor.CreateBoltProcessorFunc {
 	}
 }
 
-func (b *FileReader) Setup(ctx context.Context, oc conductor.OperatorContext, instance int) {
+func (b *FileReader) Setup(ctx context.Context, oc conductor.OperatorContext) {
 	b.oc = oc
-	b.instance = instance
 }
 func (b *FileReader) Process(ctx context.Context, t conductor.Tuple, port int) {
 	name := t.Data["name"].(string)

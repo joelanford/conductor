@@ -15,8 +15,7 @@ type DirectoryWatcher struct {
 	pattern    *regexp.Regexp
 	operations fsnotify.Op
 
-	oc       conductor.OperatorContext
-	instance int
+	oc conductor.OperatorContext
 }
 
 type DirectoryWatcherSourceOpts struct {
@@ -35,9 +34,8 @@ func NewDirectoryWatcher(directory string, pattern *regexp.Regexp, operations fs
 	}
 }
 
-func (s *DirectoryWatcher) Setup(ctx context.Context, oc conductor.OperatorContext, instance int) {
+func (s *DirectoryWatcher) Setup(ctx context.Context, oc conductor.OperatorContext) {
 	s.oc = oc
-	s.instance = instance
 }
 
 func (s *DirectoryWatcher) Process(ctx context.Context) {

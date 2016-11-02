@@ -27,7 +27,7 @@ type CreateSpoutProcessorFunc func() SpoutProcessor
 // Teardown should be used to stop any remaining goroutines, and perform any
 // other necessary cleanup.
 type SpoutProcessor interface {
-	Setup(context.Context, OperatorContext, int)
+	Setup(context.Context, OperatorContext)
 	Process(context.Context)
 	Teardown()
 }
@@ -79,7 +79,7 @@ func (o *Spout) run(ctx context.Context) {
 			}
 			oc.log.SetDebug(o.debug)
 			processor := o.createProcessor()
-			processor.Setup(ctx, oc, instance)
+			processor.Setup(ctx, oc)
 			processor.Process(ctx)
 			processor.Teardown()
 			wg.Done()

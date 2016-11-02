@@ -7,8 +7,7 @@ import (
 )
 
 type TupleLogger struct {
-	oc       conductor.OperatorContext
-	instance int
+	oc conductor.OperatorContext
 }
 
 func NewTupleLogger() conductor.CreateBoltProcessorFunc {
@@ -17,9 +16,8 @@ func NewTupleLogger() conductor.CreateBoltProcessorFunc {
 	}
 }
 
-func (b *TupleLogger) Setup(ctx context.Context, oc conductor.OperatorContext, instance int) {
+func (b *TupleLogger) Setup(ctx context.Context, oc conductor.OperatorContext) {
 	b.oc = oc
-	b.instance = instance
 }
 func (b *TupleLogger) Process(ctx context.Context, t conductor.Tuple, port int) {
 	b.oc.Log().Infof("%+v %+v", t.Metadata, t.Data)

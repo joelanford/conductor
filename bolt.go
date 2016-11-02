@@ -28,7 +28,7 @@ type CreateBoltProcessorFunc func() BoltProcessor
 // Teardown should be used to stop any remaining goroutines, and perform any
 // other necessary cleanup.
 type BoltProcessor interface {
-	Setup(context.Context, OperatorContext, int)
+	Setup(context.Context, OperatorContext)
 	Process(context.Context, Tuple, int)
 	Teardown()
 }
@@ -100,7 +100,7 @@ func (o *Bolt) run(ctx context.Context) {
 				oc.log.SetDebug(o.debug)
 
 				processor := o.createProcessor()
-				processor.Setup(ctx, oc, instance)
+				processor.Setup(ctx, oc)
 				for tuple := range ip.outputs[instance] {
 					processor.Process(ctx, *tuple, portNum)
 				}
