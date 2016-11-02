@@ -36,7 +36,7 @@ func (s *stream) registerProducer(name string) *outputPort {
 	if _, present := s.producers[name]; present {
 		panic("output port with name " + name + " already exists")
 	}
-	producer := newOutputPort(name)
+	producer := newOutputPort(s.name)
 	s.producers[name] = producer
 	return producer
 }
