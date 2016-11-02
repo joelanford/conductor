@@ -8,23 +8,38 @@ import (
 	"sync"
 )
 
-// ProcessTupleFunc functions are defined when instantiating Operator instances
-// and are called by the Topology fabric when it runs the  Operator instances.
-// This function should return when it is finished processing the tuple. Any
-// goroutines started in the function should return when the context is Done.
+// CreateBoltProcessorFunc is used by the topology to create BoltProcessor
+// instances for each instance in a parallel region.
+type CreateBoltProcessorFunc func() BoltProcessor
+
+// BoltProcessor defines the interface for user-defined Bolt processing.
+// After the topology creates the BoltProcessor using the
+// CreateBoltProcessorFunc, it calls, Setup, Process (for every tuple until the
+// input streams are closed), and Teardown in order.
 //
-// The OperatorContext provides operator name and tuple submission
-// functionality, and instance is the index of the Operator instance dictated
-// by the SourceOperator parallelism.
-type ProcessTupleFunc func(ctx context.Context, opCtx OperatorContext, tuple Tuple, instance int)
+// Setup should be used to initialize the BoltProcessor, for example to set
+// struct variables, initialize state, etc. Any goroutines started in Setup
+// should be stopped by Teardown or when the context is done.
+//
+// Process should be used to process tuples from the Bolt's input ports. Any
+// goroutines started in Process should be stopped by Teardown or when the
+// context is done.
+//
+// Teardown should be used to stop any remaining goroutines, and perform any
+// other necessary cleanup.
+type BoltProcessor interface {
+	Setup(context.Context, OperatorContext, int)
+	Process(context.Context, Tuple, int)
+	Teardown()
+}
 
 // Bolt encapsulates the necessary information and functionality to perform
 // operations on a stream (or streams) of incoming tuples
 type Bolt struct {
-	name        string
-	process     ProcessTupleFunc
-	parallelism int
-	debug       bool
+	name            string
+	createProcessor CreateBoltProcessorFunc
+	parallelism     int
+	debug           bool
 
 	topology *Topology
 
@@ -76,17 +91,20 @@ func (o *Bolt) run(ctx context.Context) {
 		}(ip)
 		for instance := 0; instance < o.parallelism; instance++ {
 			go func(ip *inputPort, portNum int, instance int) {
-				opCtx := &OperatorContext{
+				oc := OperatorContext{
 					name:     o.name,
 					instance: instance,
 					log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
 					outputs:  o.outputs,
 				}
-				opCtx.log.SetDebug(o.debug)
+				oc.log.SetDebug(o.debug)
 
+				processor := o.createProcessor()
+				processor.Setup(ctx, oc, instance)
 				for tuple := range ip.outputs[instance] {
-					o.process(ctx, *opCtx, *tuple, portNum)
+					processor.Process(ctx, *tuple, portNum)
 				}
+				processor.Teardown()
 				wg.Done()
 			}(ip, portNum, instance)
 		}

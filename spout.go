@@ -8,24 +8,38 @@ import (
 	"sync"
 )
 
-// ProcessFunc functions are defined when instantiating SourceOperator
-// instances and are called by the Topology fabric when it runs the
-// SourceOperator instances.  This function should return when there
-// are no further tuples to create, or when the context is Done.
+// CreateSpoutProcessorFunc is used by the topology to create SpoutProcessor
+// instances for each instance in a parallel region.
+type CreateSpoutProcessorFunc func() SpoutProcessor
+
+// SpoutProcessor defines the interface for user-defined Spout processing.
+// After the topology creates the SpoutProcessor using the
+// CreateSpoutProcessorFunc, it calls, Setup, Process, and Teardown in order.
 //
-// The OperatorContext provides operator name and tuple submission
-// functionality, and instance is the index of the SourceOperator instance
-// dictated by the SourceOperator parallelism.
-type ProcessFunc func(ctx context.Context, opCtx OperatorContext)
+// Setup should be used to initialize the SpoutProcessor, for example to set
+// struct variables, initialize state, etc. Any goroutines started in Setup
+// should be stopped by Teardown or when the context is done.
+//
+// Process should be used to create and submit tuples from an external source.
+// Any goroutines started in Process should be stopped by Teardown or when the
+// context is done.
+//
+// Teardown should be used to stop any remaining goroutines, and perform any
+// other necessary cleanup.
+type SpoutProcessor interface {
+	Setup(context.Context, OperatorContext, int)
+	Process(context.Context)
+	Teardown()
+}
 
 // Spout encapsulates the necessary information and functionality to
 // create tuples from an external source (e.g. network socket, file, channel,
 // etc.)
 type Spout struct {
-	name        string
-	process     ProcessFunc
-	parallelism int
-	debug       bool
+	name            string
+	createProcessor CreateSpoutProcessorFunc
+	parallelism     int
+	debug           bool
 
 	topology *Topology
 
@@ -57,14 +71,17 @@ func (o *Spout) run(ctx context.Context) {
 	wg.Add(o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
 		go func(ctx context.Context, o *Spout, instance int) {
-			opCtx := &OperatorContext{
+			oc := OperatorContext{
 				name:     o.name,
 				instance: instance,
 				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
 				outputs:  o.outputs,
 			}
-			opCtx.log.SetDebug(o.debug)
-			o.process(ctx, *opCtx)
+			oc.log.SetDebug(o.debug)
+			processor := o.createProcessor()
+			processor.Setup(ctx, oc, instance)
+			processor.Process(ctx)
+			processor.Teardown()
 			wg.Done()
 		}(ctx, o, instance)
 	}

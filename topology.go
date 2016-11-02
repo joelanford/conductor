@@ -30,13 +30,13 @@ func NewTopology(name string) *Topology {
 // AddSpout creates and adds a new Spout instance to the
 // topology. This function returns a Spout instance, which is used
 // to declare the streams that the Spout instance produces.
-func (t *Topology) AddSpout(name string, process ProcessFunc, parallelism int) *Spout {
+func (t *Topology) AddSpout(name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
 	o := Spout{
-		name:        name,
-		process:     process,
-		parallelism: parallelism,
-		debug:       false,
-		topology:    t,
+		name:            name,
+		createProcessor: createProcessor,
+		parallelism:     parallelism,
+		debug:           false,
+		topology:        t,
 	}
 	t.spouts = append(t.spouts, o)
 	return &t.spouts[len(t.spouts)-1]
@@ -45,13 +45,13 @@ func (t *Topology) AddSpout(name string, process ProcessFunc, parallelism int) *
 // AddBolt creates and adds a new Bolt instance to the topology. This
 // function returns an Bolt instance, which is used to declare the streams
 // that the Bolt instance consumes and produces.
-func (t *Topology) AddBolt(name string, process ProcessTupleFunc, parallelism int) *Bolt {
+func (t *Topology) AddBolt(name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
 	o := Bolt{
-		name:        name,
-		process:     process,
-		parallelism: parallelism,
-		debug:       false,
-		topology:    t,
+		name:            name,
+		createProcessor: createProcessor,
+		parallelism:     parallelism,
+		debug:           false,
+		topology:        t,
 	}
 	t.bolts = append(t.bolts, o)
 	return &t.bolts[len(t.bolts)-1]
