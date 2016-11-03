@@ -123,3 +123,18 @@ func TestStreamManyToMany(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkStream(b *testing.B) {
+	s := newStream("test")
+	p := s.registerProducer("p")
+	c := s.registerConsumer("c", PartitionRoundRobin(), 1, 100)
+
+	go s.run()
+
+	tuple := &Tuple{Data: map[string]interface{}{"a": 1}}
+	for i := 0; i < b.N; i++ {
+		p.channel <- tuple
+		<-c.input
+	}
+	close(p.channel)
+}

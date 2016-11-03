@@ -115,3 +115,17 @@ func TestInputPortRoundRobinOverflow(t *testing.T) {
 	}()
 	ip.run()
 }
+
+func BenchmarkInputPort(b *testing.B) {
+	ip := newInputPort(PartitionRoundRobin(), 1, 1)
+	in := &Tuple{Data: map[string]interface{}{"value": 1}}
+
+	go func() {
+		for i := 0; i < b.N; i++ {
+			ip.input <- in
+			<-ip.outputs[0]
+		}
+		close(ip.input)
+	}()
+	ip.run()
+}
