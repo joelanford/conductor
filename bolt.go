@@ -82,33 +82,43 @@ func (o *Bolt) SetDebug(debug bool) *Bolt {
 func (o *Bolt) run(ctx context.Context) {
 	var wg sync.WaitGroup
 
-	wg.Add(len(o.inputs) * (o.parallelism + 1))
-
-	for portNum, ip := range o.inputs {
+	wg.Add(len(o.inputs))
+	for _, ip := range o.inputs {
 		go func(ip *inputPort) {
 			ip.run()
 			wg.Done()
 		}(ip)
-		for instance := 0; instance < o.parallelism; instance++ {
-			go func(ip *inputPort, portNum int, instance int) {
-				oc := OperatorContext{
-					name:     o.name,
-					instance: instance,
-					log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
-					outputs:  o.outputs,
-				}
-				oc.log.SetDebug(o.debug)
-
-				processor := o.createProcessor()
-				processor.Setup(ctx, oc)
-				for tuple := range ip.outputs[instance] {
-					processor.Process(ctx, *tuple, portNum)
-				}
-				processor.Teardown()
-				wg.Done()
-			}(ip, portNum, instance)
-		}
 	}
+
+	wg.Add(o.parallelism * len(o.inputs))
+	for instance := 0; instance < o.parallelism; instance++ {
+		go func(instance int) {
+			oc := OperatorContext{
+				name:     o.name,
+				instance: instance,
+				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
+				outputs:  o.outputs,
+			}
+			oc.log.SetDebug(o.debug)
+
+			processor := o.createProcessor()
+
+			processor.Setup(ctx, oc)
+
+			for portNum, ip := range o.inputs {
+				go func(ip *inputPort, portNum int) {
+					for tuple := range ip.outputs[instance] {
+						processor.Process(ctx, *tuple, portNum)
+					}
+					wg.Done()
+				}(ip, portNum)
+			}
+
+			processor.Teardown()
+			wg.Done()
+		}(instance)
+	}
+
 	wg.Wait()
 	for _, output := range o.outputs {
 		close(output.channel)
