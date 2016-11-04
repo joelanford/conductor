@@ -74,7 +74,7 @@ func (o *Spout) run(ctx context.Context) {
 			oc := OperatorContext{
 				name:     o.name,
 				instance: instance,
-				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.LUTC),
+				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
 				outputs:  o.outputs,
 			}
 			oc.log.SetDebug(o.debug)
