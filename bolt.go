@@ -90,7 +90,7 @@ func (o *Bolt) run(ctx context.Context) {
 		}(ip)
 	}
 
-	wg.Add(o.parallelism * len(o.inputs))
+	wg.Add((len(o.inputs) + 1) * o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
 		go func(instance int) {
 			oc := OperatorContext{

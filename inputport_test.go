@@ -89,43 +89,51 @@ func BenchmarkHashPartitioner(b *testing.B) {
 func TestInputPortRoundRobinNoOverflow(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		ip := newInputPort(PartitionRoundRobin(), i, i)
-		go func() {
-			for j := 0; j < i; j++ {
-				in := &Tuple{Data: map[string]interface{}{"value": i}}
-				ip.input <- in
-				out := <-ip.outputs[j]
-				assert.Equal(t, in, out)
-			}
-			close(ip.input)
-		}()
-		ip.run()
+		go ip.run()
+
+		for j := 0; j < i; j++ {
+			in := &Tuple{Data: map[string]interface{}{"value": i}}
+			ip.input <- in
+			out := <-ip.outputs[j]
+			assert.Equal(t, in, out)
+		}
+		close(ip.input)
 	}
 }
 
 func TestInputPortRoundRobinOverflow(t *testing.T) {
 	ip := newInputPort(PartitionRoundRobin(), 4, 100)
-	go func() {
-		for j := 0; j < 100; j++ {
-			in := &Tuple{Data: map[string]interface{}{"value": j}}
-			ip.input <- in
-			out := <-ip.outputs[j%4]
-			assert.Equal(t, in, out)
-		}
-		close(ip.input)
-	}()
-	ip.run()
+	go ip.run()
+
+	for j := 0; j < 100; j++ {
+		in := &Tuple{Data: map[string]interface{}{"value": j}}
+		ip.input <- in
+		out := <-ip.outputs[j%4]
+		assert.Equal(t, in, out)
+	}
+	close(ip.input)
 }
 
-func BenchmarkInputPort(b *testing.B) {
-	ip := newInputPort(PartitionRoundRobin(), 1, 1)
+func BenchmarkInputPortNoParallelism(b *testing.B) {
+	ip := newInputPort(nil, 1, 1)
 	in := &Tuple{Data: map[string]interface{}{"value": 1}}
+	go ip.run()
 
-	go func() {
-		for i := 0; i < b.N; i++ {
-			ip.input <- in
-			<-ip.outputs[0]
-		}
-		close(ip.input)
-	}()
-	ip.run()
+	for i := 0; i < b.N; i++ {
+		ip.input <- in
+		<-ip.outputs[0]
+	}
+	close(ip.input)
+}
+
+func BenchmarkInputPortParallelism(b *testing.B) {
+	ip := newInputPort(PartitionRoundRobin(), 100, 1)
+	in := &Tuple{Data: map[string]interface{}{"value": 1}}
+	go ip.run()
+
+	for i := 0; i < b.N; i++ {
+		ip.input <- in
+		<-ip.outputs[i%100]
+	}
+	close(ip.input)
 }

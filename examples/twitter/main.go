@@ -48,10 +48,10 @@ func main() {
 	t.AddSpout("twitterstream", operators.NewTwitterStream(*consumerKey, *consumerSecret, *accessToken, *accessTokenSecret), 1).
 		Produces("twitter")
 	t.AddBolt("hashtagmapper", operators.NewMap(hashtagMapper), 1).
-		Consumes("twitter", conductor.PartitionRoundRobin(), 1000).
+		Consumes("twitter", nil, 1000).
 		Produces("hashtags")
 	t.AddBolt("topk", operators.NewTopN(100000000, 5, 10, "hashtag"), 1).
-		Consumes("hashtags", conductor.PartitionRoundRobin(), 1000).
+		Consumes("hashtags", nil, 1000).
 		Produces("tophashtags")
 	t.AddBolt("printer", operators.NewTupleLogger(), 2).
 		Consumes("tophashtags", conductor.PartitionRoundRobin(), 1000)
