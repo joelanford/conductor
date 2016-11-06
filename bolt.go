@@ -28,8 +28,8 @@ type CreateBoltProcessorFunc func() BoltProcessor
 // Teardown should be used to stop any remaining goroutines, and perform any
 // other necessary cleanup.
 type BoltProcessor interface {
-	Setup(context.Context, OperatorContext)
-	Process(context.Context, Tuple, int)
+	Setup(context.Context, *OperatorContext)
+	Process(context.Context, *Tuple, int)
 	Teardown()
 }
 
@@ -61,13 +61,32 @@ func (o *Bolt) Produces(streamNames ...string) *Bolt {
 	return o
 }
 
-// Consumes is used to register streams to the Bolt, which
-// it will use to receive tuples from upstream producers
-func (o *Bolt) Consumes(streamName string, partition PartitionFunc, queueSize int) *Bolt {
+// ConsumesPartitioned is used to register streams to the Bolt, which it will
+// use to receive tuples from upstream producers. It also allows users to
+// specify a custom partitioning function.
+func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, queueSize int) *Bolt {
 	stream, ok := o.topology.streams[streamName]
 	if !ok {
 		stream = newStream(streamName)
 		o.topology.streams[streamName] = stream
+	}
+	o.inputs = append(o.inputs, stream.registerConsumer(o.name, partition, o.parallelism, queueSize))
+	return o
+}
+
+// Consumes is used to register streams to the Bolt, which it will use to
+// receive tuples from upstream producers. If the operator parallelism is
+// greater than one, round robin partitioning will automatically be used.
+func (o *Bolt) Consumes(streamName string, queueSize int) *Bolt {
+	stream, ok := o.topology.streams[streamName]
+	if !ok {
+		stream = newStream(streamName)
+		o.topology.streams[streamName] = stream
+	}
+
+	var partition PartitionFunc
+	if o.parallelism > 1 {
+		partition = PartitionRoundRobin()
 	}
 	o.inputs = append(o.inputs, stream.registerConsumer(o.name, partition, o.parallelism, queueSize))
 	return o
@@ -93,27 +112,23 @@ func (o *Bolt) run(ctx context.Context) {
 	wg.Add((len(o.inputs) + 1) * o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
 		go func(instance int) {
-			oc := OperatorContext{
+			oc := &OperatorContext{
 				name:     o.name,
 				instance: instance,
 				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
 				outputs:  o.outputs,
 			}
 			oc.log.SetDebug(o.debug)
-
 			processor := o.createProcessor()
-
 			processor.Setup(ctx, oc)
-
 			for portNum, ip := range o.inputs {
 				go func(ip *inputPort, portNum int) {
 					for tuple := range ip.outputs[instance] {
-						processor.Process(ctx, *tuple, portNum)
+						processor.Process(ctx, tuple, portNum)
 					}
 					wg.Done()
 				}(ip, portNum)
 			}
-
 			processor.Teardown()
 			wg.Done()
 		}(instance)

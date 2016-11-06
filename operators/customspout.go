@@ -6,11 +6,11 @@ import (
 	"github.com/joelanford/conductor"
 )
 
-type CustomSpoutFunc func(context.Context, conductor.OperatorContext)
+type CustomSpoutFunc func(context.Context, *conductor.OperatorContext)
 
 type CustomSpout struct {
 	process CustomSpoutFunc
-	oc      conductor.OperatorContext
+	oc      *conductor.OperatorContext
 }
 
 func NewCustomSpout(customSpout CustomSpoutFunc) conductor.CreateSpoutProcessorFunc {
@@ -21,7 +21,7 @@ func NewCustomSpout(customSpout CustomSpoutFunc) conductor.CreateSpoutProcessorF
 	}
 }
 
-func (s *CustomSpout) Setup(ctx context.Context, oc conductor.OperatorContext) {
+func (s *CustomSpout) Setup(ctx context.Context, oc *conductor.OperatorContext) {
 	s.oc = oc
 }
 
