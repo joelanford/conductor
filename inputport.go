@@ -58,12 +58,14 @@ func PartitionHash(fieldNames ...string) PartitionFunc {
 }
 
 type inputPort struct {
-	input     chan *Tuple
-	outputs   []chan *Tuple
-	partition PartitionFunc
+	streamName   string
+	operatorName string
+	input        chan *Tuple
+	outputs      []chan *Tuple
+	partition    PartitionFunc
 }
 
-func newInputPort(partitionFunc PartitionFunc, parallelism, queueSize int) *inputPort {
+func newInputPort(streamName, operatorName string, partitionFunc PartitionFunc, parallelism, queueSize int) *inputPort {
 	outputs := make([]chan *Tuple, parallelism)
 	for i := 0; i < parallelism; i++ {
 		outputs[i] = make(chan *Tuple, queueSize)
@@ -77,9 +79,11 @@ func newInputPort(partitionFunc PartitionFunc, parallelism, queueSize int) *inpu
 	}
 
 	return &inputPort{
-		input:     input,
-		outputs:   outputs,
-		partition: partitionFunc,
+		streamName:   streamName,
+		operatorName: operatorName,
+		input:        input,
+		outputs:      outputs,
+		partition:    partitionFunc,
 	}
 }
 
