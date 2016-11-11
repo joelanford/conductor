@@ -3,6 +3,13 @@ package conductor
 import (
 	"context"
 	"sync"
+
+	"os"
+
+	"net/http"
+
+	"github.com/braintree/manners"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Topology is the top-level entry point of Conductor.  It is used to create
@@ -13,17 +20,20 @@ type Topology struct {
 	spouts  []Spout
 	bolts   []Bolt
 	streams map[string]*stream
-	debug   bool
+
+	debug          bool
+	collectMetrics bool
 }
 
 // NewTopology creates a new Topology instance
 func NewTopology(name string) *Topology {
 	return &Topology{
-		name:    name,
-		spouts:  make([]Spout, 0),
-		bolts:   make([]Bolt, 0),
-		streams: make(map[string]*stream),
-		debug:   false,
+		name:           name,
+		spouts:         make([]Spout, 0),
+		bolts:          make([]Bolt, 0),
+		streams:        make(map[string]*stream),
+		debug:          false,
+		collectMetrics: false,
 	}
 }
 
@@ -63,6 +73,29 @@ func (t *Topology) AddBolt(name string, createProcessor CreateBoltProcessorFunc,
 // for the same Topology instance. The passed in context can be used to cancel
 // the Topology before all spouts have completed.
 func (t *Topology) Run(ctx context.Context) error {
+
+	// This WaitGroup is used to wait for the metrics collection http endpoint
+	// to complete before returning from this function. Waiting on this
+	// WaitGroup will only block if metrics collection is enabled.
+	var httpWg sync.WaitGroup
+
+	// If metrics collection is enabled, register a process collector for this
+	// process, and a topology collector for stats about bolts, spouts, and
+	// streams.
+	if t.collectMetrics {
+		prometheus.Register(prometheus.NewProcessCollector(os.Getpid(), "conductor"))
+		prometheus.Register(NewTopologyCollector(t))
+
+		r := http.NewServeMux()
+		r.Handle("/metrics", prometheus.Handler())
+
+		httpWg.Add(1)
+		go func() {
+			manners.ListenAndServe(":9100", r)
+			httpWg.Done()
+		}()
+	}
+
 	// This WaitGroup is used to wait for all bolts and streams to complete
 	// before returning from this function.
 	var wg sync.WaitGroup
@@ -98,10 +131,21 @@ func (t *Topology) Run(ctx context.Context) error {
 
 	// Wait for all streams, spouts, and bolts to complete.
 	wg.Wait()
+
+	// If metrics colleciton is enabled, wait for metrics http endpoint to complete
+	if t.collectMetrics {
+		manners.Close()
+		httpWg.Wait()
+	}
 	return nil
 }
 
 func (t *Topology) SetDebug(debug bool) *Topology {
 	t.debug = debug
+	return t
+}
+
+func (t *Topology) SetMetricsCollection(collectMetrics bool) *Topology {
+	t.collectMetrics = collectMetrics
 	return t
 }

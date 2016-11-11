@@ -45,6 +45,9 @@ type Bolt struct {
 
 	inputs  []*inputPort
 	outputs []*outputPort
+
+	tuplesLastReceived []float64
+	tuplesReceived     []float64
 }
 
 // Produces is used to register streams to the Bolt, which
@@ -71,6 +74,8 @@ func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, q
 		o.topology.streams[streamName] = stream
 	}
 	o.inputs = append(o.inputs, stream.registerConsumer(o.name, partition, o.parallelism, queueSize))
+	o.tuplesLastReceived = append(o.tuplesLastReceived, 0)
+	o.tuplesReceived = append(o.tuplesReceived, 0)
 	return o
 }
 
@@ -89,6 +94,8 @@ func (o *Bolt) Consumes(streamName string, queueSize int) *Bolt {
 		partition = PartitionRoundRobin()
 	}
 	o.inputs = append(o.inputs, stream.registerConsumer(o.name, partition, o.parallelism, queueSize))
+	o.tuplesLastReceived = append(o.tuplesLastReceived, 0)
+	o.tuplesReceived = append(o.tuplesReceived, 0)
 	return o
 }
 
@@ -124,6 +131,7 @@ func (o *Bolt) run(ctx context.Context) {
 			for portNum, ip := range o.inputs {
 				go func(ip *inputPort, portNum int) {
 					for tuple := range ip.outputs[instance] {
+						o.tuplesReceived[portNum]++
 						processor.Process(ctx, tuple, portNum)
 					}
 					wg.Done()
@@ -138,4 +146,10 @@ func (o *Bolt) run(ctx context.Context) {
 	for _, output := range o.outputs {
 		close(output.channel)
 	}
+}
+
+func (o *Bolt) tuplesReceivedDelta(portNum int) float64 {
+	delta := o.tuplesReceived[portNum] - o.tuplesLastReceived[portNum]
+	o.tuplesLastReceived[portNum] = o.tuplesReceived[portNum]
+	return delta
 }

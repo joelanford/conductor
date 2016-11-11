@@ -12,6 +12,11 @@ type stream struct {
 
 	// All operators that consume a stream will be assigned their own consumer channel
 	consumers map[string]*inputPort
+
+	tuplesLastReceived float64
+	tuplesReceived     float64
+	tuplesLastSent     float64
+	tuplesSent         float64
 }
 
 // NewStream creates a new Stream instance.
@@ -43,7 +48,9 @@ func (s *stream) registerProducer(name string) *outputPort {
 
 func (s *stream) run() {
 	for tuple := range s.mergeProducers() {
+		s.tuplesReceived++
 		for _, ip := range s.consumers {
+			s.tuplesSent++
 			ip.input <- tuple
 		}
 	}
@@ -77,4 +84,16 @@ func (s *stream) mergeProducers() <-chan *Tuple {
 		close(out)
 	}()
 	return out
+}
+
+func (o *stream) tuplesReceivedDelta() float64 {
+	delta := o.tuplesReceived - o.tuplesLastReceived
+	o.tuplesLastReceived = o.tuplesReceived
+	return delta
+}
+
+func (o *stream) tuplesSentDelta() float64 {
+	delta := o.tuplesSent - o.tuplesLastSent
+	o.tuplesLastSent = o.tuplesSent
+	return delta
 }
