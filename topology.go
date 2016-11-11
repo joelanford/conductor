@@ -110,7 +110,7 @@ func (t *Topology) SetDebug(debug bool) *Topology {
 	return t
 }
 
-func (t *Topology) Graph() {
+func (t *Topology) Graph(ofile string) {
 	graph := gographviz.NewGraph()
 	graph.Name = t.name
 	graph.Directed = true
@@ -136,5 +136,5 @@ func (t *Topology) Graph() {
 			graph.AddNode(t.name, o.name, map[string]string{"shape": "rectangle"})
 		}
 	}
-	ioutil.WriteFile(t.name+".dot", []byte(graph.String()), 0644)
+	ioutil.WriteFile(ofile, []byte(graph.String()), 0644)
 }
