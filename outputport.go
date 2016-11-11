@@ -1,13 +1,15 @@
 package conductor
 
 type outputPort struct {
-	name    string
-	channel chan *Tuple
+	streamName   string
+	operatorName string
+	channel      chan *Tuple
 }
 
-func newOutputPort(name string) *outputPort {
+func newOutputPort(streamName, operatorName string) *outputPort {
 	return &outputPort{
-		name:    name,
-		channel: make(chan *Tuple),
+		streamName:   streamName,
+		operatorName: operatorName,
+		channel:      make(chan *Tuple),
 	}
 }

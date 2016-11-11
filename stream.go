@@ -27,7 +27,7 @@ func (s *stream) registerConsumer(name string, partition PartitionFunc, parallel
 	if _, present := s.consumers[name]; present {
 		panic("input port with name " + name + " already exists")
 	}
-	consumer := newInputPort(partition, parallelism, queueSize)
+	consumer := newInputPort(s.name, name, partition, parallelism, queueSize)
 	s.consumers[name] = consumer
 	return consumer
 }
@@ -36,7 +36,7 @@ func (s *stream) registerProducer(name string) *outputPort {
 	if _, present := s.producers[name]; present {
 		panic("output port with name " + name + " already exists")
 	}
-	producer := newOutputPort(s.name)
+	producer := newOutputPort(s.name, name)
 	s.producers[name] = producer
 	return producer
 }

@@ -30,7 +30,7 @@ func (o *OperatorContext) Log() InfoDebugLogger {
 // an undefined port will result in a panic.
 func (o *OperatorContext) Submit(t TupleData, port int) {
 	outputPort := o.outputs[port]
-	metadata := TupleMetadata{StreamName: outputPort.name, Producer: o.name, Instance: o.instance}
+	metadata := TupleMetadata{StreamName: outputPort.streamName, Producer: o.name, Instance: o.instance}
 	outputPort.channel <- &Tuple{Metadata: metadata, Data: t}
 }
 
