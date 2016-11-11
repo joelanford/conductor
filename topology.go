@@ -3,6 +3,10 @@ package conductor
 import (
 	"context"
 	"sync"
+
+	"io/ioutil"
+
+	"github.com/awalterschulze/gographviz"
 )
 
 // Topology is the top-level entry point of Conductor.  It is used to create
@@ -104,4 +108,33 @@ func (t *Topology) Run(ctx context.Context) error {
 func (t *Topology) SetDebug(debug bool) *Topology {
 	t.debug = debug
 	return t
+}
+
+func (t *Topology) Graph() {
+	graph := gographviz.NewGraph()
+	graph.Name = t.name
+	graph.Directed = true
+	graph.Attrs.Add("rankdir", "LR")
+	for _, s := range t.streams {
+		graph.AddNode(t.name, s.name, map[string]string{"shape": "rarrow"})
+		for p, _ := range s.producers {
+			graph.AddEdge(p, s.name, true, nil)
+		}
+		for c, _ := range s.consumers {
+			graph.AddEdge(s.name, c, true, nil)
+		}
+	}
+
+	for _, o := range t.spouts {
+		graph.AddNode(t.name, o.name, map[string]string{"shape": "ellipse"})
+	}
+
+	for _, o := range t.bolts {
+		if len(o.outputs) == 0 {
+			graph.AddNode(t.name, o.name, map[string]string{"shape": "ellipse"})
+		} else {
+			graph.AddNode(t.name, o.name, map[string]string{"shape": "rectangle"})
+		}
+	}
+	ioutil.WriteFile(t.name+".dot", []byte(graph.String()), 0644)
 }
