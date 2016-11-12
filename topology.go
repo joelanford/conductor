@@ -3,13 +3,6 @@ package conductor
 import (
 	"context"
 	"sync"
-
-	"os"
-
-	"net/http"
-
-	"github.com/braintree/manners"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Topology is the top-level entry point of Conductor.  It is used to create
@@ -17,23 +10,21 @@ import (
 // instances connected by Stream instances.
 type Topology struct {
 	name    string
-	spouts  []Spout
-	bolts   []Bolt
+	spouts  []*Spout
+	bolts   []*Bolt
 	streams map[string]*stream
 
-	debug          bool
-	collectMetrics bool
+	debug bool
 }
 
 // NewTopology creates a new Topology instance
 func NewTopology(name string) *Topology {
 	return &Topology{
-		name:           name,
-		spouts:         make([]Spout, 0),
-		bolts:          make([]Bolt, 0),
-		streams:        make(map[string]*stream),
-		debug:          false,
-		collectMetrics: false,
+		name:    name,
+		spouts:  make([]*Spout, 0),
+		bolts:   make([]*Bolt, 0),
+		streams: make(map[string]*stream),
+		debug:   false,
 	}
 }
 
@@ -41,30 +32,18 @@ func NewTopology(name string) *Topology {
 // topology. This function returns a Spout instance, which is used
 // to declare the streams that the Spout instance produces.
 func (t *Topology) AddSpout(name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
-	o := Spout{
-		name:            name,
-		createProcessor: createProcessor,
-		parallelism:     parallelism,
-		debug:           false,
-		topology:        t,
-	}
+	o := newSpout(t, name, createProcessor, parallelism)
 	t.spouts = append(t.spouts, o)
-	return &t.spouts[len(t.spouts)-1]
+	return o
 }
 
 // AddBolt creates and adds a new Bolt instance to the topology. This
 // function returns an Bolt instance, which is used to declare the streams
 // that the Bolt instance consumes and produces.
 func (t *Topology) AddBolt(name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
-	o := Bolt{
-		name:            name,
-		createProcessor: createProcessor,
-		parallelism:     parallelism,
-		debug:           false,
-		topology:        t,
-	}
+	o := newBolt(t, name, createProcessor, parallelism)
 	t.bolts = append(t.bolts, o)
-	return &t.bolts[len(t.bolts)-1]
+	return o
 }
 
 // Run executes the Topology instance.  This function should only be called
@@ -73,29 +52,6 @@ func (t *Topology) AddBolt(name string, createProcessor CreateBoltProcessorFunc,
 // for the same Topology instance. The passed in context can be used to cancel
 // the Topology before all spouts have completed.
 func (t *Topology) Run(ctx context.Context) error {
-
-	// This WaitGroup is used to wait for the metrics collection http endpoint
-	// to complete before returning from this function. Waiting on this
-	// WaitGroup will only block if metrics collection is enabled.
-	var httpWg sync.WaitGroup
-
-	// If metrics collection is enabled, register a process collector for this
-	// process, and a topology collector for stats about bolts, spouts, and
-	// streams.
-	if t.collectMetrics {
-		prometheus.Register(prometheus.NewProcessCollector(os.Getpid(), "conductor"))
-		prometheus.Register(NewTopologyCollector(t))
-
-		r := http.NewServeMux()
-		r.Handle("/metrics", prometheus.Handler())
-
-		httpWg.Add(1)
-		go func() {
-			manners.ListenAndServe(":9100", r)
-			httpWg.Done()
-		}()
-	}
-
 	// This WaitGroup is used to wait for all bolts and streams to complete
 	// before returning from this function.
 	var wg sync.WaitGroup
@@ -112,7 +68,7 @@ func (t *Topology) Run(ctx context.Context) error {
 	// Run all of the spouts
 	wg.Add(len(t.spouts))
 	for _, o := range t.spouts {
-		go func(o Spout) {
+		go func(o *Spout) {
 			o.debug = o.debug || t.debug
 			o.run(ctx)
 			wg.Done()
@@ -122,7 +78,7 @@ func (t *Topology) Run(ctx context.Context) error {
 	// Run all of the bolts
 	wg.Add(len(t.bolts))
 	for _, o := range t.bolts {
-		go func(o Bolt) {
+		go func(o *Bolt) {
 			o.debug = o.debug || t.debug
 			o.run(ctx)
 			wg.Done()
@@ -131,21 +87,10 @@ func (t *Topology) Run(ctx context.Context) error {
 
 	// Wait for all streams, spouts, and bolts to complete.
 	wg.Wait()
-
-	// If metrics colleciton is enabled, wait for metrics http endpoint to complete
-	if t.collectMetrics {
-		manners.Close()
-		httpWg.Wait()
-	}
 	return nil
 }
 
 func (t *Topology) SetDebug(debug bool) *Topology {
 	t.debug = debug
-	return t
-}
-
-func (t *Topology) SetMetricsCollection(collectMetrics bool) *Topology {
-	t.collectMetrics = collectMetrics
 	return t
 }

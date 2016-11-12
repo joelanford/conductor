@@ -7,7 +7,7 @@ import (
 	"github.com/awalterschulze/gographviz"
 )
 
-func (t *Topology) Graph(file string) {
+func (t *Topology) CreateGraphFile(file string) {
 	graph := gographviz.NewGraph()
 
 	graph.SetName(t.name)

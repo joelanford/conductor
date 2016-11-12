@@ -46,6 +46,16 @@ type Spout struct {
 	outputs []*outputPort
 }
 
+func newSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
+	return &Spout{
+		name:            name,
+		createProcessor: createProcessor,
+		parallelism:     parallelism,
+		debug:           false,
+		topology:        t,
+	}
+}
+
 // Produces is used to register streams to the Spout, which
 // it will use to send tuples to downstream consumers
 func (o *Spout) Produces(streamNames ...string) *Spout {
@@ -55,7 +65,7 @@ func (o *Spout) Produces(streamNames ...string) *Spout {
 			stream = newStream(streamName)
 			o.topology.streams[streamName] = stream
 		}
-		o.outputs = append(o.outputs, stream.registerProducer(o.name))
+		o.outputs = append(o.outputs, stream.registerProducer(o.name, len(o.outputs)))
 	}
 	return o
 }
