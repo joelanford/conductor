@@ -28,10 +28,12 @@ func (o *OperatorContext) Log() InfoDebugLogger {
 // counts from 0 and corresponds to the order that streams were defined by the
 // SourceOperator or Operator instance's Produces() function. Submitting on
 // an undefined port will result in a panic.
-func (o *OperatorContext) Submit(t TupleData, port int) {
+func (o *OperatorContext) Submit(t *Tuple, port int) {
 	outputPort := o.outputs[port]
-	metadata := TupleMetadata{StreamName: outputPort.streamName, Producer: o.name, Instance: o.instance}
-	outputPort.submit(&Tuple{Metadata: metadata, Data: t})
+	t.Metadata.StreamName = outputPort.streamName
+	t.Metadata.Producer = o.name
+	t.Metadata.Instance = o.instance
+	outputPort.submit(t)
 }
 
 // NumPorts returns the number of output ports defined in the topology. This

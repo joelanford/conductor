@@ -6,7 +6,7 @@ import (
 	"github.com/joelanford/conductor"
 )
 
-type MapFunc func(*conductor.Tuple) conductor.TupleData
+type MapFunc func(*conductor.Tuple) *conductor.Tuple
 
 type Map struct {
 	oc     *conductor.OperatorContext

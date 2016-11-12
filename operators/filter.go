@@ -26,9 +26,9 @@ func (b *Filter) Setup(ctx context.Context, oc *conductor.OperatorContext) {
 }
 func (b *Filter) Process(ctx context.Context, t *conductor.Tuple, port int) {
 	if b.filter(t) {
-		b.oc.Submit(t.Data, 0)
+		b.oc.Submit(t, 0)
 	} else if b.oc.NumPorts() > 1 {
-		b.oc.Submit(t.Data, 1)
+		b.oc.Submit(t, 1)
 	}
 }
 func (b *Filter) Teardown() {}
