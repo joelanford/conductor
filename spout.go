@@ -80,7 +80,7 @@ func (o *Spout) run(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Add(o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
-		go func(ctx context.Context, o *Spout, instance int) {
+		go func(instance int) {
 			oc := &OperatorContext{
 				name:     o.name,
 				instance: instance,
@@ -93,7 +93,7 @@ func (o *Spout) run(ctx context.Context) {
 			processor.Process(ctx)
 			processor.Teardown()
 			wg.Done()
-		}(ctx, o, instance)
+		}(instance)
 	}
 
 	wg.Wait()
