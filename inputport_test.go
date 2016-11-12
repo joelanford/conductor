@@ -88,7 +88,7 @@ func BenchmarkHashPartitioner(b *testing.B) {
 
 func TestInputPortRoundRobinNoOverflow(t *testing.T) {
 	for i := 1; i <= 100; i++ {
-		ip := newInputPort(PartitionRoundRobin(), i, i)
+		ip := newInputPort("stream", "operator", PartitionRoundRobin(), i, i)
 		go ip.run()
 
 		for j := 0; j < i; j++ {
@@ -102,7 +102,7 @@ func TestInputPortRoundRobinNoOverflow(t *testing.T) {
 }
 
 func TestInputPortRoundRobinOverflow(t *testing.T) {
-	ip := newInputPort(PartitionRoundRobin(), 4, 100)
+	ip := newInputPort("stream", "operator", PartitionRoundRobin(), 4, 100)
 	go ip.run()
 
 	for j := 0; j < 100; j++ {
@@ -115,7 +115,7 @@ func TestInputPortRoundRobinOverflow(t *testing.T) {
 }
 
 func BenchmarkInputPortNoParallelism(b *testing.B) {
-	ip := newInputPort(nil, 1, 1)
+	ip := newInputPort("stream", "operator", nil, 1, 1)
 	in := &Tuple{Data: map[string]interface{}{"value": 1}}
 	go ip.run()
 
@@ -127,7 +127,7 @@ func BenchmarkInputPortNoParallelism(b *testing.B) {
 }
 
 func BenchmarkInputPortParallelism(b *testing.B) {
-	ip := newInputPort(PartitionRoundRobin(), 100, 1)
+	ip := newInputPort("stream", "operator", PartitionRoundRobin(), 100, 1)
 	in := &Tuple{Data: map[string]interface{}{"value": 1}}
 	go ip.run()
 

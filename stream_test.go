@@ -8,7 +8,7 @@ import (
 
 func TestStreamOneToOne(t *testing.T) {
 	s := newStream("test")
-	p := s.registerProducer("p")
+	p := s.registerProducer("p", 0)
 	c := s.registerConsumer("c", PartitionRoundRobin(), 1, 0)
 
 	go s.run()
@@ -21,7 +21,7 @@ func TestStreamOneToOne(t *testing.T) {
 
 func TestStreamOneToMany(t *testing.T) {
 	s := newStream("test")
-	p := s.registerProducer("p")
+	p := s.registerProducer("p", 0)
 	c1 := s.registerConsumer("c1", PartitionRoundRobin(), 1, 0)
 	c2 := s.registerConsumer("c2", PartitionRoundRobin(), 1, 0)
 	c3 := s.registerConsumer("c3", PartitionRoundRobin(), 1, 0)
@@ -45,9 +45,9 @@ func TestStreamOneToMany(t *testing.T) {
 
 func TestStreamManyToOne(t *testing.T) {
 	s := newStream("test")
-	p1 := s.registerProducer("p1")
-	p2 := s.registerProducer("p2")
-	p3 := s.registerProducer("p3")
+	p1 := s.registerProducer("p1", 0)
+	p2 := s.registerProducer("p2", 1)
+	p3 := s.registerProducer("p3", 2)
 	c := s.registerConsumer("c", PartitionRoundRobin(), 1, 0)
 
 	go s.run()
@@ -71,9 +71,9 @@ func TestStreamManyToOne(t *testing.T) {
 
 func TestStreamManyToMany(t *testing.T) {
 	s := newStream("test")
-	p1 := s.registerProducer("p1")
-	p2 := s.registerProducer("p2")
-	p3 := s.registerProducer("p3")
+	p1 := s.registerProducer("p1", 0)
+	p2 := s.registerProducer("p2", 1)
+	p3 := s.registerProducer("p3", 2)
 	c1 := s.registerConsumer("c1", PartitionRoundRobin(), 1, 0)
 	c2 := s.registerConsumer("c2", PartitionRoundRobin(), 1, 0)
 	c3 := s.registerConsumer("c3", PartitionRoundRobin(), 1, 0)
@@ -126,7 +126,7 @@ func TestStreamManyToMany(t *testing.T) {
 
 func BenchmarkStream(b *testing.B) {
 	s := newStream("test")
-	p := s.registerProducer("p")
+	p := s.registerProducer("p", 0)
 	c := s.registerConsumer("c", PartitionRoundRobin(), 1, 100)
 
 	go s.run()

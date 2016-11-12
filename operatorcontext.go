@@ -31,7 +31,7 @@ func (o *OperatorContext) Log() InfoDebugLogger {
 func (o *OperatorContext) Submit(t TupleData, port int) {
 	outputPort := o.outputs[port]
 	metadata := TupleMetadata{StreamName: outputPort.streamName, Producer: o.name, Instance: o.instance}
-	outputPort.channel <- &Tuple{Metadata: metadata, Data: t}
+	outputPort.submit(&Tuple{Metadata: metadata, Data: t})
 }
 
 // NumPorts returns the number of output ports defined in the topology. This

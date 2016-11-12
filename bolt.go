@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // CreateBoltProcessorFunc is used by the topology to create BoltProcessor
@@ -45,6 +48,23 @@ type Bolt struct {
 
 	inputs  []*inputPort
 	outputs []*outputPort
+
+	tuplesReceived *prometheus.CounterVec
+}
+
+func newBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
+	return &Bolt{
+		name:            name,
+		createProcessor: createProcessor,
+		parallelism:     parallelism,
+		debug:           false,
+		topology:        t,
+		tuplesReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "conductor",
+			Name:      "tuples_received_total",
+			Help:      "The total number of tuples recevied by an operator in a conductor topology",
+		}, []string{"operator", "stream", "port"}),
+	}
 }
 
 // Produces is used to register streams to the Bolt, which
@@ -56,7 +76,8 @@ func (o *Bolt) Produces(streamNames ...string) *Bolt {
 			stream = newStream(streamName)
 			o.topology.streams[streamName] = stream
 		}
-		o.outputs = append(o.outputs, stream.registerProducer(o.name))
+
+		o.outputs = append(o.outputs, stream.registerProducer(o.name, len(o.outputs)))
 	}
 	return o
 }
@@ -124,6 +145,7 @@ func (o *Bolt) run(ctx context.Context) {
 			for portNum, ip := range o.inputs {
 				go func(ip *inputPort, portNum int) {
 					for tuple := range ip.outputs[instance] {
+						o.tuplesReceived.WithLabelValues(o.name, ip.streamName, strconv.Itoa(portNum)).Inc()
 						processor.Process(ctx, tuple, portNum)
 					}
 					wg.Done()

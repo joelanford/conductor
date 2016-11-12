@@ -32,11 +32,11 @@ func (s *stream) registerConsumer(name string, partition PartitionFunc, parallel
 	return consumer
 }
 
-func (s *stream) registerProducer(name string) *outputPort {
+func (s *stream) registerProducer(name string, portNum int) *outputPort {
 	if _, present := s.producers[name]; present {
 		panic("output port with name " + name + " already exists")
 	}
-	producer := newOutputPort(s.name, name)
+	producer := newOutputPort(s.name, name, portNum)
 	s.producers[name] = producer
 	return producer
 }
