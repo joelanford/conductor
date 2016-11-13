@@ -158,6 +158,6 @@ func (o *Bolt) run(ctx context.Context) {
 
 	wg.Wait()
 	for _, output := range o.outputs {
-		close(output.channel)
+		output.close()
 	}
 }

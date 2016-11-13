@@ -10,7 +10,7 @@ type outputPort struct {
 	streamName   string
 	operatorName string
 	portNum      int
-	channel      chan *Tuple
+	c            chan *Tuple
 
 	tuplesSent *prometheus.CounterVec
 }
@@ -20,7 +20,7 @@ func newOutputPort(streamName, operatorName string, portNum int) *outputPort {
 		streamName:   streamName,
 		operatorName: operatorName,
 		portNum:      portNum,
-		channel:      make(chan *Tuple),
+		c:            make(chan *Tuple),
 		tuplesSent: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "conductor",
 			Name:      "tuples_sent_total",
@@ -29,7 +29,15 @@ func newOutputPort(streamName, operatorName string, portNum int) *outputPort {
 	}
 }
 
+func (op *outputPort) channel() <-chan *Tuple {
+	return op.c
+}
+
 func (op *outputPort) submit(t *Tuple) {
 	op.tuplesSent.WithLabelValues(op.operatorName, op.streamName, strconv.Itoa(op.portNum)).Inc()
-	op.channel <- t
+	op.c <- t
+}
+
+func (op *outputPort) close() {
+	close(op.c)
 }

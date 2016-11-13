@@ -14,8 +14,8 @@ func TestStreamOneToOne(t *testing.T) {
 	go s.run()
 
 	tuple := &Tuple{Data: map[string]interface{}{"a": 1}}
-	p.channel <- tuple
-	close(p.channel)
+	p.submit(tuple)
+	p.close()
 	assert.Equal(t, tuple, <-c.input)
 }
 
@@ -29,8 +29,8 @@ func TestStreamOneToMany(t *testing.T) {
 	go s.run()
 
 	tuple1 := &Tuple{Data: map[string]interface{}{"a": 1}}
-	p.channel <- tuple1
-	close(p.channel)
+	p.submit(tuple1)
+	p.close()
 	for i := 0; i < 3; i++ {
 		select {
 		case tuple := <-c1.input:
@@ -56,16 +56,16 @@ func TestStreamManyToOne(t *testing.T) {
 	tuple2 := &Tuple{Data: map[string]interface{}{"a": 2}}
 	tuple3 := &Tuple{Data: map[string]interface{}{"a": 3}}
 
-	p1.channel <- tuple1
-	close(p1.channel)
+	p1.submit(tuple1)
+	p1.close()
 	assert.Equal(t, tuple1, <-c.input)
 
-	p2.channel <- tuple2
-	close(p2.channel)
+	p2.submit(tuple2)
+	p2.close()
 	assert.Equal(t, tuple2, <-c.input)
 
-	p3.channel <- tuple3
-	close(p3.channel)
+	p3.submit(tuple3)
+	p3.close()
 	assert.Equal(t, tuple3, <-c.input)
 }
 
@@ -84,8 +84,8 @@ func TestStreamManyToMany(t *testing.T) {
 	tuple2 := &Tuple{Data: map[string]interface{}{"a": 2}}
 	tuple3 := &Tuple{Data: map[string]interface{}{"a": 3}}
 
-	p1.channel <- tuple1
-	close(p1.channel)
+	p1.submit(tuple1)
+	p1.close()
 	for i := 0; i < 3; i++ {
 		select {
 		case tuple := <-c1.input:
@@ -97,8 +97,8 @@ func TestStreamManyToMany(t *testing.T) {
 		}
 	}
 
-	p2.channel <- tuple2
-	close(p2.channel)
+	p2.submit(tuple2)
+	p2.close()
 	for i := 0; i < 3; i++ {
 		select {
 		case tuple := <-c1.input:
@@ -110,8 +110,8 @@ func TestStreamManyToMany(t *testing.T) {
 		}
 	}
 
-	p3.channel <- tuple3
-	close(p3.channel)
+	p3.submit(tuple3)
+	p3.close()
 	for i := 0; i < 3; i++ {
 		select {
 		case tuple := <-c1.input:
@@ -133,8 +133,8 @@ func BenchmarkStream(b *testing.B) {
 
 	tuple := &Tuple{Data: map[string]interface{}{"a": 1}}
 	for i := 0; i < b.N; i++ {
-		p.channel <- tuple
+		p.submit(tuple)
 		<-c.input
 	}
-	close(p.channel)
+	p.close()
 }

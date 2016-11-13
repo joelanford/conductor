@@ -67,7 +67,7 @@ func (s *stream) mergeProducers() <-chan *Tuple {
 	}
 	wg.Add(len(s.producers))
 	for _, p := range s.producers {
-		go output(p.channel)
+		go output(p.channel())
 	}
 
 	// Start a goroutine to close out once all the output goroutines are
