@@ -46,8 +46,8 @@ type Bolt struct {
 
 	topology *Topology
 
-	inputs  []*inputPort
-	outputs []*outputPort
+	inputs  []*InputPort
+	outputs []*OutputPort
 
 	tuplesReceived *prometheus.CounterVec
 }
@@ -73,11 +73,12 @@ func (o *Bolt) Produces(streamNames ...string) *Bolt {
 	for _, streamName := range streamNames {
 		stream, ok := o.topology.streams[streamName]
 		if !ok {
-			stream = newStream(streamName)
+			stream = NewStream(streamName)
 			o.topology.streams[streamName] = stream
 		}
 
-		o.outputs = append(o.outputs, stream.registerProducer(o.name, len(o.outputs)))
+		output := stream.RegisterProducer(o.name)
+		o.outputs = append(o.outputs, NewOutputPort(streamName, o.name, len(o.outputs), output))
 	}
 	return o
 }
@@ -88,10 +89,12 @@ func (o *Bolt) Produces(streamNames ...string) *Bolt {
 func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, queueSize int) *Bolt {
 	stream, ok := o.topology.streams[streamName]
 	if !ok {
-		stream = newStream(streamName)
+		stream = NewStream(streamName)
 		o.topology.streams[streamName] = stream
 	}
-	o.inputs = append(o.inputs, stream.registerConsumer(o.name, partition, o.parallelism, queueSize))
+
+	input := stream.RegisterConsumer(o.name, queueSize)
+	o.inputs = append(o.inputs, NewInputPort(streamName, o.name, partition, o.parallelism, input))
 	return o
 }
 
@@ -101,7 +104,7 @@ func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, q
 func (o *Bolt) Consumes(streamName string, queueSize int) *Bolt {
 	stream, ok := o.topology.streams[streamName]
 	if !ok {
-		stream = newStream(streamName)
+		stream = NewStream(streamName)
 		o.topology.streams[streamName] = stream
 	}
 
@@ -109,7 +112,9 @@ func (o *Bolt) Consumes(streamName string, queueSize int) *Bolt {
 	if o.parallelism > 1 {
 		partition = PartitionRoundRobin()
 	}
-	o.inputs = append(o.inputs, stream.registerConsumer(o.name, partition, o.parallelism, queueSize))
+	input := stream.RegisterConsumer(o.name, queueSize)
+
+	o.inputs = append(o.inputs, NewInputPort(streamName, o.name, partition, o.parallelism, input))
 	return o
 }
 
@@ -124,8 +129,8 @@ func (o *Bolt) run(ctx context.Context) {
 
 	wg.Add(len(o.inputs))
 	for _, ip := range o.inputs {
-		go func(ip *inputPort) {
-			ip.run()
+		go func(ip *InputPort) {
+			ip.Run()
 			wg.Done()
 		}(ip)
 	}
@@ -146,7 +151,7 @@ func (o *Bolt) run(ctx context.Context) {
 			var inputWg sync.WaitGroup
 			inputWg.Add(len(o.inputs))
 			for portNum, ip := range o.inputs {
-				go func(ip *inputPort, portNum int) {
+				go func(ip *InputPort, portNum int) {
 					for tuple := range ip.outputs[instance] {
 						o.tuplesReceived.WithLabelValues(o.name, ip.streamName, strconv.Itoa(portNum)).Inc()
 						processor.Process(ctx, tuple, portNum)
@@ -162,6 +167,6 @@ func (o *Bolt) run(ctx context.Context) {
 
 	wg.Wait()
 	for _, output := range o.outputs {
-		output.close()
+		output.Close()
 	}
 }

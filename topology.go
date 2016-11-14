@@ -12,7 +12,7 @@ type Topology struct {
 	name    string
 	spouts  []*Spout
 	bolts   []*Bolt
-	streams map[string]*stream
+	streams map[string]*Stream
 
 	debug bool
 }
@@ -23,7 +23,7 @@ func NewTopology(name string) *Topology {
 		name:    name,
 		spouts:  make([]*Spout, 0),
 		bolts:   make([]*Bolt, 0),
-		streams: make(map[string]*stream),
+		streams: make(map[string]*Stream),
 		debug:   false,
 	}
 }
@@ -59,8 +59,8 @@ func (t *Topology) Run(ctx context.Context) error {
 	// Run all of the streams
 	wg.Add(len(t.streams))
 	for _, s := range t.streams {
-		go func(s *stream) {
-			s.run()
+		go func(s *Stream) {
+			s.Run()
 			wg.Done()
 		}(s)
 	}

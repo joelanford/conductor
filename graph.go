@@ -18,9 +18,9 @@ func (t *Topology) CreateGraphFile(file string) {
 	graph.AddAttr(t.name, "splines", "spline")
 
 	for _, s := range t.streams {
-		for _, p := range s.producers {
-			for _, c := range s.consumers {
-				graph.AddPortEdge(p.operatorName, p.operatorName+":o"+s.name, c.operatorName, c.operatorName+":i"+s.name, true, nil)
+		for _, p := range s.Producers() {
+			for _, c := range s.Consumers() {
+				graph.AddPortEdge(p.Name, p.Name+":o"+s.name, c.Name, c.Name+":i"+s.name, true, nil)
 			}
 		}
 	}
@@ -36,7 +36,7 @@ func (t *Topology) CreateGraphFile(file string) {
 	ioutil.WriteFile(file, []byte(graph.String()), 0644)
 }
 
-func createGraphNode(inputs []*inputPort, name string, parallelism int, outputs []*outputPort) *gographviz.Node {
+func createGraphNode(inputs []*InputPort, name string, parallelism int, outputs []*OutputPort) *gographviz.Node {
 	var iports []string
 	for _, ip := range inputs {
 		iports = append(iports, fmt.Sprintf("<TD PORT=\"i%s\">%s</TD>", ip.streamName, ip.streamName))

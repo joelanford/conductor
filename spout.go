@@ -43,7 +43,7 @@ type Spout struct {
 
 	topology *Topology
 
-	outputs []*outputPort
+	outputs []*OutputPort
 }
 
 func newSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
@@ -62,10 +62,11 @@ func (o *Spout) Produces(streamNames ...string) *Spout {
 	for _, streamName := range streamNames {
 		stream, ok := o.topology.streams[streamName]
 		if !ok {
-			stream = newStream(streamName)
+			stream = NewStream(streamName)
 			o.topology.streams[streamName] = stream
 		}
-		o.outputs = append(o.outputs, stream.registerProducer(o.name, len(o.outputs)))
+		output := stream.RegisterProducer(o.name)
+		o.outputs = append(o.outputs, NewOutputPort(streamName, o.name, len(o.outputs), output))
 	}
 	return o
 }
@@ -98,6 +99,6 @@ func (o *Spout) run(ctx context.Context) {
 
 	wg.Wait()
 	for _, output := range o.outputs {
-		output.close()
+		output.Close()
 	}
 }

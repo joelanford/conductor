@@ -1,9 +1,10 @@
-package conductor
+package conductor_test
 
 import (
 	"fmt"
 	"testing"
 
+	"github.com/joelanford/conductor"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -11,40 +12,40 @@ func TestInputPort(t *testing.T) {
 	parallelisms := []int{1, 10, 100}
 	for _, parallelism := range parallelisms {
 		t.Run(fmt.Sprintf("parallelism=%d", parallelism), func(t *testing.T) {
-			ip := newInputPort("stream", "operator", PartitionRoundRobin(), parallelism, 1)
-			go ip.run()
+			input := make(chan *conductor.Tuple, 1)
+			ip := conductor.NewInputPort("stream", "operator", conductor.PartitionRoundRobin(), parallelism, input)
+			go ip.Run()
 
-			if parallelism == 1 {
-				assert.Equal(t, ip.input, ip.outputs[0])
-			} else {
-				assert.Equal(t, parallelism, len(ip.outputs))
-			}
+			assert.Equal(t, "stream", ip.StreamName())
+			assert.Equal(t, "operator", ip.OperatorName())
+			assert.Equal(t, parallelism, ip.NumOutputs())
 
-			for j := 0; j < 100; j++ {
-				in := &Tuple{Data: map[string]interface{}{"value": j}}
-				ip.input <- in
-				out := <-ip.outputs[j%parallelism]
+			for i := 0; i < 100; i++ {
+				in := &conductor.Tuple{Data: map[string]interface{}{"value": i}}
+				ip.Input() <- in
+				out := <-ip.Output(i % parallelism)
 				assert.Equal(t, in, out)
 			}
-			close(ip.input)
+			ip.Close()
 		})
 	}
 }
 
 func BenchmarkInputPort(b *testing.B) {
-	in := &Tuple{Data: map[string]interface{}{"value": 1}}
+	in := &conductor.Tuple{Data: map[string]interface{}{"value": 1}}
 
 	parallelisms := []int{1, 10, 100}
 	for _, parallelism := range parallelisms {
 		b.Run(fmt.Sprintf("parallelism=%d", parallelism), func(b *testing.B) {
-			ip := newInputPort("stream", "operator", PartitionRoundRobin(), parallelism, 1)
-			go ip.run()
+			input := make(chan *conductor.Tuple, 1)
+			ip := conductor.NewInputPort("stream", "operator", conductor.PartitionRoundRobin(), parallelism, input)
+			go ip.Run()
 
 			for i := 0; i < b.N; i++ {
-				ip.input <- in
-				<-ip.outputs[i%parallelism]
+				ip.Input() <- in
+				<-ip.Output(i % parallelism)
 			}
-			close(ip.input)
+			ip.Close()
 		})
 	}
 }

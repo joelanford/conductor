@@ -1,140 +1,152 @@
-package conductor
+package conductor_test
 
 import (
 	"testing"
 
+	"github.com/joelanford/conductor"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestStreamOneToOne(t *testing.T) {
-	s := newStream("test")
-	p := s.registerProducer("p", 0)
-	c := s.registerConsumer("c", PartitionRoundRobin(), 1, 0)
+	s := conductor.NewStream("test")
+	p := s.RegisterProducer("p")
+	c := s.RegisterConsumer("c", 0)
+	tuple := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
 
-	go s.run()
+	assert.Equal(t, 1, len(s.Producers()))
+	assert.Equal(t, 1, len(s.Consumers()))
 
-	tuple := &Tuple{Data: map[string]interface{}{"a": 1}}
-	p.submit(tuple)
-	p.close()
-	assert.Equal(t, tuple, <-c.input)
+	go s.Run()
+
+	p <- tuple
+	close(p)
+	assert.Equal(t, tuple, <-c)
+
 }
 
 func TestStreamOneToMany(t *testing.T) {
-	s := newStream("test")
-	p := s.registerProducer("p", 0)
-	c1 := s.registerConsumer("c1", PartitionRoundRobin(), 1, 0)
-	c2 := s.registerConsumer("c2", PartitionRoundRobin(), 1, 0)
-	c3 := s.registerConsumer("c3", PartitionRoundRobin(), 1, 0)
+	s := conductor.NewStream("test")
+	p := s.RegisterProducer("p")
+	c1 := s.RegisterConsumer("c1", 0)
+	c2 := s.RegisterConsumer("c2", 0)
+	c3 := s.RegisterConsumer("c3", 0)
+	tuple1 := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
 
-	go s.run()
+	assert.Equal(t, 1, len(s.Producers()))
+	assert.Equal(t, 3, len(s.Consumers()))
 
-	tuple1 := &Tuple{Data: map[string]interface{}{"a": 1}}
-	p.submit(tuple1)
-	p.close()
+	go s.Run()
+
+	p <- tuple1
+	close(p)
 	for i := 0; i < 3; i++ {
 		select {
-		case tuple := <-c1.input:
+		case tuple := <-c1:
 			assert.Equal(t, tuple1, tuple)
-		case tuple := <-c2.input:
+		case tuple := <-c2:
 			assert.Equal(t, tuple1, tuple)
-		case tuple := <-c3.input:
+		case tuple := <-c3:
 			assert.Equal(t, tuple1, tuple)
 		}
 	}
 }
 
 func TestStreamManyToOne(t *testing.T) {
-	s := newStream("test")
-	p1 := s.registerProducer("p1", 0)
-	p2 := s.registerProducer("p2", 1)
-	p3 := s.registerProducer("p3", 2)
-	c := s.registerConsumer("c", PartitionRoundRobin(), 1, 0)
+	s := conductor.NewStream("test")
+	p1 := s.RegisterProducer("p1")
+	p2 := s.RegisterProducer("p2")
+	p3 := s.RegisterProducer("p3")
+	c := s.RegisterConsumer("c", 0)
+	tuple1 := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
+	tuple2 := &conductor.Tuple{Data: map[string]interface{}{"a": 2}}
+	tuple3 := &conductor.Tuple{Data: map[string]interface{}{"a": 3}}
 
-	go s.run()
+	assert.Equal(t, 3, len(s.Producers()))
+	assert.Equal(t, 1, len(s.Consumers()))
 
-	tuple1 := &Tuple{Data: map[string]interface{}{"a": 1}}
-	tuple2 := &Tuple{Data: map[string]interface{}{"a": 2}}
-	tuple3 := &Tuple{Data: map[string]interface{}{"a": 3}}
+	go s.Run()
 
-	p1.submit(tuple1)
-	p1.close()
-	assert.Equal(t, tuple1, <-c.input)
+	p1 <- tuple1
+	close(p1)
+	assert.Equal(t, tuple1, <-c)
 
-	p2.submit(tuple2)
-	p2.close()
-	assert.Equal(t, tuple2, <-c.input)
+	p2 <- tuple2
+	close(p2)
+	assert.Equal(t, tuple2, <-c)
 
-	p3.submit(tuple3)
-	p3.close()
-	assert.Equal(t, tuple3, <-c.input)
+	p3 <- tuple3
+	close(p3)
+	assert.Equal(t, tuple3, <-c)
 }
 
 func TestStreamManyToMany(t *testing.T) {
-	s := newStream("test")
-	p1 := s.registerProducer("p1", 0)
-	p2 := s.registerProducer("p2", 1)
-	p3 := s.registerProducer("p3", 2)
-	c1 := s.registerConsumer("c1", PartitionRoundRobin(), 1, 0)
-	c2 := s.registerConsumer("c2", PartitionRoundRobin(), 1, 0)
-	c3 := s.registerConsumer("c3", PartitionRoundRobin(), 1, 0)
+	s := conductor.NewStream("test")
+	p1 := s.RegisterProducer("p1")
+	p2 := s.RegisterProducer("p2")
+	p3 := s.RegisterProducer("p3")
+	c1 := s.RegisterConsumer("c1", 0)
+	c2 := s.RegisterConsumer("c2", 0)
+	c3 := s.RegisterConsumer("c3", 0)
+	tuple1 := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
+	tuple2 := &conductor.Tuple{Data: map[string]interface{}{"a": 2}}
+	tuple3 := &conductor.Tuple{Data: map[string]interface{}{"a": 3}}
 
-	go s.run()
+	assert.Equal(t, 3, len(s.Producers()))
+	assert.Equal(t, 3, len(s.Consumers()))
 
-	tuple1 := &Tuple{Data: map[string]interface{}{"a": 1}}
-	tuple2 := &Tuple{Data: map[string]interface{}{"a": 2}}
-	tuple3 := &Tuple{Data: map[string]interface{}{"a": 3}}
+	go s.Run()
 
-	p1.submit(tuple1)
-	p1.close()
+	p1 <- tuple1
+	close(p1)
 	for i := 0; i < 3; i++ {
 		select {
-		case tuple := <-c1.input:
+		case tuple := <-c1:
 			assert.Equal(t, tuple1, tuple)
-		case tuple := <-c2.input:
+		case tuple := <-c2:
 			assert.Equal(t, tuple1, tuple)
-		case tuple := <-c3.input:
+		case tuple := <-c3:
 			assert.Equal(t, tuple1, tuple)
 		}
 	}
 
-	p2.submit(tuple2)
-	p2.close()
+	p2 <- tuple2
+	close(p2)
 	for i := 0; i < 3; i++ {
 		select {
-		case tuple := <-c1.input:
+		case tuple := <-c1:
 			assert.Equal(t, tuple2, tuple)
-		case tuple := <-c2.input:
+		case tuple := <-c2:
 			assert.Equal(t, tuple2, tuple)
-		case tuple := <-c3.input:
+		case tuple := <-c3:
 			assert.Equal(t, tuple2, tuple)
 		}
 	}
 
-	p3.submit(tuple3)
-	p3.close()
+	p3 <- tuple3
+	close(p3)
 	for i := 0; i < 3; i++ {
 		select {
-		case tuple := <-c1.input:
+		case tuple := <-c1:
 			assert.Equal(t, tuple3, tuple)
-		case tuple := <-c2.input:
+		case tuple := <-c2:
 			assert.Equal(t, tuple3, tuple)
-		case tuple := <-c3.input:
+		case tuple := <-c3:
 			assert.Equal(t, tuple3, tuple)
 		}
 	}
 }
 
 func BenchmarkStream(b *testing.B) {
-	s := newStream("test")
-	p := s.registerProducer("p", 0)
-	c := s.registerConsumer("c", PartitionRoundRobin(), 1, 100)
+	s := conductor.NewStream("test")
+	p := s.RegisterProducer("p")
+	c := s.RegisterConsumer("c", 100)
+	tuple := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
 
-	go s.run()
+	go s.Run()
 
-	tuple := &Tuple{Data: map[string]interface{}{"a": 1}}
 	for i := 0; i < b.N; i++ {
-		p.submit(tuple)
-		<-c.input
+		p <- tuple
+		<-c
 	}
-	p.close()
+	close(p)
 }

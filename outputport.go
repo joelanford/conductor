@@ -6,21 +6,21 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type outputPort struct {
+type OutputPort struct {
 	streamName   string
 	operatorName string
 	portNum      int
-	c            chan *Tuple
+	output       chan *Tuple
 
 	tuplesSent *prometheus.CounterVec
 }
 
-func newOutputPort(streamName, operatorName string, portNum int) *outputPort {
-	return &outputPort{
+func NewOutputPort(streamName, operatorName string, portNum int, output chan *Tuple) *OutputPort {
+	return &OutputPort{
 		streamName:   streamName,
 		operatorName: operatorName,
 		portNum:      portNum,
-		c:            make(chan *Tuple),
+		output:       output,
 		tuplesSent: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "conductor",
 			Name:      "tuples_sent_total",
@@ -29,15 +29,19 @@ func newOutputPort(streamName, operatorName string, portNum int) *outputPort {
 	}
 }
 
-func (op *outputPort) channel() <-chan *Tuple {
-	return op.c
+func (op *OutputPort) StreamName() string {
+	return op.streamName
 }
 
-func (op *outputPort) submit(t *Tuple) {
+func (op *OutputPort) OperatorName() string {
+	return op.operatorName
+}
+
+func (op *OutputPort) Submit(t *Tuple) {
 	op.tuplesSent.WithLabelValues(op.operatorName, op.streamName, strconv.Itoa(op.portNum)).Inc()
-	op.c <- t
+	op.output <- t
 }
 
-func (op *outputPort) close() {
-	close(op.c)
+func (op *OutputPort) Close() {
+	close(op.output)
 }
