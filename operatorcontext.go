@@ -42,3 +42,7 @@ func (o *OperatorContext) Submit(t *Tuple, port int) {
 func (o *OperatorContext) NumPorts() int {
 	return len(o.outputs)
 }
+
+func (o *OperatorContext) SetDebug(debug bool) {
+	o.log.SetDebug(debug)
+}

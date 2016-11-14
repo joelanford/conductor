@@ -52,7 +52,7 @@ type Bolt struct {
 	tuplesReceived *prometheus.CounterVec
 }
 
-func newBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
+func NewBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
 	return &Bolt{
 		name:            name,
 		createProcessor: createProcessor,
@@ -124,7 +124,7 @@ func (o *Bolt) SetDebug(debug bool) *Bolt {
 	return o
 }
 
-func (o *Bolt) run(ctx context.Context) {
+func (o *Bolt) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	wg.Add(len(o.inputs))
@@ -144,7 +144,7 @@ func (o *Bolt) run(ctx context.Context) {
 				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
 				outputs:  o.outputs,
 			}
-			oc.log.SetDebug(o.debug)
+			oc.SetDebug(o.debug)
 			processor := o.createProcessor()
 			processor.Setup(ctx, oc)
 

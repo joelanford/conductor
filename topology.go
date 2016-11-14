@@ -32,7 +32,7 @@ func NewTopology(name string) *Topology {
 // topology. This function returns a Spout instance, which is used
 // to declare the streams that the Spout instance produces.
 func (t *Topology) AddSpout(name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
-	o := newSpout(t, name, createProcessor, parallelism)
+	o := NewSpout(t, name, createProcessor, parallelism)
 	t.spouts = append(t.spouts, o)
 	return o
 }
@@ -41,7 +41,7 @@ func (t *Topology) AddSpout(name string, createProcessor CreateSpoutProcessorFun
 // function returns an Bolt instance, which is used to declare the streams
 // that the Bolt instance consumes and produces.
 func (t *Topology) AddBolt(name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
-	o := newBolt(t, name, createProcessor, parallelism)
+	o := NewBolt(t, name, createProcessor, parallelism)
 	t.bolts = append(t.bolts, o)
 	return o
 }
@@ -69,8 +69,10 @@ func (t *Topology) Run(ctx context.Context) error {
 	wg.Add(len(t.spouts))
 	for _, o := range t.spouts {
 		go func(o *Spout) {
-			o.debug = o.debug || t.debug
-			o.run(ctx)
+			if t.debug {
+				o.SetDebug(true)
+			}
+			o.Run(ctx)
 			wg.Done()
 		}(o)
 	}
@@ -79,8 +81,10 @@ func (t *Topology) Run(ctx context.Context) error {
 	wg.Add(len(t.bolts))
 	for _, o := range t.bolts {
 		go func(o *Bolt) {
-			o.debug = o.debug || t.debug
-			o.run(ctx)
+			if t.debug {
+				o.SetDebug(true)
+			}
+			o.Run(ctx)
 			wg.Done()
 		}(o)
 	}
