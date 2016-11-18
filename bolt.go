@@ -71,10 +71,10 @@ func NewBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, 
 // it will use to send tuples to downstream consumers
 func (o *Bolt) Produces(streamNames ...string) *Bolt {
 	for _, streamName := range streamNames {
-		stream, ok := o.topology.streams[streamName]
+		stream, ok := o.topology.GetStream(streamName)
 		if !ok {
 			stream = NewStream(streamName)
-			o.topology.streams[streamName] = stream
+			o.topology.AddStream(stream)
 		}
 
 		output := stream.RegisterProducer(o.name)
@@ -87,10 +87,10 @@ func (o *Bolt) Produces(streamNames ...string) *Bolt {
 // use to receive tuples from upstream producers. It also allows users to
 // specify a custom partitioning function.
 func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, queueSize int) *Bolt {
-	stream, ok := o.topology.streams[streamName]
+	stream, ok := o.topology.GetStream(streamName)
 	if !ok {
 		stream = NewStream(streamName)
-		o.topology.streams[streamName] = stream
+		o.topology.AddStream(stream)
 	}
 
 	input := stream.RegisterConsumer(o.name, queueSize)
@@ -102,10 +102,10 @@ func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, q
 // receive tuples from upstream producers. If the operator parallelism is
 // greater than one, round robin partitioning will automatically be used.
 func (o *Bolt) Consumes(streamName string, queueSize int) *Bolt {
-	stream, ok := o.topology.streams[streamName]
+	stream, ok := o.topology.GetStream(streamName)
 	if !ok {
 		stream = NewStream(streamName)
-		o.topology.streams[streamName] = stream
+		o.topology.AddStream(stream)
 	}
 
 	var partition PartitionFunc
@@ -152,8 +152,8 @@ func (o *Bolt) Run(ctx context.Context) {
 			inputWg.Add(len(o.inputs))
 			for portNum, ip := range o.inputs {
 				go func(ip *InputPort, portNum int) {
-					for tuple := range ip.outputs[instance] {
-						o.tuplesReceived.WithLabelValues(o.name, ip.streamName, strconv.Itoa(portNum)).Inc()
+					for tuple := range ip.Output(instance) {
+						o.tuplesReceived.WithLabelValues(o.name, ip.StreamName(), strconv.Itoa(portNum)).Inc()
 						processor.Process(ctx, tuple, portNum)
 					}
 					inputWg.Done()

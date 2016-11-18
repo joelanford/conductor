@@ -29,6 +29,10 @@ func NewStream(name string) *Stream {
 	}
 }
 
+func (s *Stream) Name() string {
+	return s.name
+}
+
 func (s *Stream) RegisterConsumer(name string, queueSize int) chan *Tuple {
 	if _, present := s.consumers[name]; present {
 		panic("consumer with name " + name + " already exists")
@@ -75,7 +79,6 @@ func (s *Stream) Run() {
 	for _, ip := range s.consumers {
 		close(ip)
 	}
-
 }
 
 func (s *Stream) mergeProducers() <-chan *Tuple {

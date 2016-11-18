@@ -60,11 +60,12 @@ func NewSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc
 // it will use to send tuples to downstream consumers
 func (o *Spout) Produces(streamNames ...string) *Spout {
 	for _, streamName := range streamNames {
-		stream, ok := o.topology.streams[streamName]
+		stream, ok := o.topology.GetStream(streamName)
 		if !ok {
 			stream = NewStream(streamName)
-			o.topology.streams[streamName] = stream
+			o.topology.AddStream(stream)
 		}
+
 		output := stream.RegisterProducer(o.name)
 		o.outputs = append(o.outputs, NewOutputPort(streamName, o.name, len(o.outputs), output))
 	}

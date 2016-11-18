@@ -28,6 +28,18 @@ func NewTopology(name string) *Topology {
 	}
 }
 
+func (t *Topology) AddStream(s *Stream) {
+	stream, ok := t.streams[s.Name()]
+	if !ok {
+		t.streams[s.Name()] = stream
+	}
+}
+
+func (t *Topology) GetStream(name string) (*Stream, bool) {
+	stream, ok := t.streams[name]
+	return stream, ok
+}
+
 // AddSpout creates and adds a new Spout instance to the
 // topology. This function returns a Spout instance, which is used
 // to declare the streams that the Spout instance produces.

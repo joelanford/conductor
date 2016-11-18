@@ -39,12 +39,12 @@ func (t *Topology) CreateGraphFile(file string) {
 func createGraphNode(inputs []*InputPort, name string, parallelism int, outputs []*OutputPort) *gographviz.Node {
 	var iports []string
 	for _, ip := range inputs {
-		iports = append(iports, fmt.Sprintf("<TD PORT=\"i%s\">%s</TD>", ip.streamName, ip.streamName))
+		iports = append(iports, fmt.Sprintf("<TD PORT=\"i%s\">%s</TD>", ip.StreamName(), ip.StreamName()))
 	}
 
 	var oports []string
 	for _, op := range outputs {
-		oports = append(oports, fmt.Sprintf("<TD PORT=\"o%s\">%s</TD>", op.streamName, op.streamName))
+		oports = append(oports, fmt.Sprintf("<TD PORT=\"o%s\">%s</TD>", op.StreamName(), op.StreamName()))
 	}
 
 	rows := len(iports)
