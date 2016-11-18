@@ -130,7 +130,7 @@ func (o *Bolt) run(ctx context.Context) {
 		}(ip)
 	}
 
-	wg.Add((len(o.inputs) + 1) * o.parallelism)
+	wg.Add(o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
 		go func(instance int) {
 			oc := &OperatorContext{
@@ -142,15 +142,19 @@ func (o *Bolt) run(ctx context.Context) {
 			oc.log.SetDebug(o.debug)
 			processor := o.createProcessor()
 			processor.Setup(ctx, oc)
+
+			var inputWg sync.WaitGroup
+			inputWg.Add(len(o.inputs))
 			for portNum, ip := range o.inputs {
 				go func(ip *inputPort, portNum int) {
 					for tuple := range ip.outputs[instance] {
 						o.tuplesReceived.WithLabelValues(o.name, ip.streamName, strconv.Itoa(portNum)).Inc()
 						processor.Process(ctx, tuple, portNum)
 					}
-					wg.Done()
+					inputWg.Done()
 				}(ip, portNum)
 			}
+			inputWg.Wait()
 			processor.Teardown()
 			wg.Done()
 		}(instance)
