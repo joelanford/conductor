@@ -49,21 +49,28 @@ type Bolt struct {
 	inputs  []*InputPort
 	outputs []*OutputPort
 
-	tuplesReceived *prometheus.CounterVec
+	tuplesReceived   *prometheus.CounterVec
+	metricsCollector *OperatorCollector
 }
 
 func NewBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
+	tuplesReceived := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "conductor",
+		Name:      "tuples_received_total",
+		Help:      "The total number of tuples recevied by an operator in a conductor topology",
+	}, []string{"operator", "stream", "port"})
+
+	metricsCollector := NewOperatorCollector()
+	metricsCollector.Register(tuplesReceived)
+
 	return &Bolt{
-		name:            name,
-		createProcessor: createProcessor,
-		parallelism:     parallelism,
-		debug:           false,
-		topology:        t,
-		tuplesReceived: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "conductor",
-			Name:      "tuples_received_total",
-			Help:      "The total number of tuples recevied by an operator in a conductor topology",
-		}, []string{"operator", "stream", "port"}),
+		name:             name,
+		createProcessor:  createProcessor,
+		parallelism:      parallelism,
+		debug:            false,
+		topology:         t,
+		tuplesReceived:   tuplesReceived,
+		metricsCollector: metricsCollector,
 	}
 }
 
@@ -71,14 +78,13 @@ func NewBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, 
 // it will use to send tuples to downstream consumers
 func (o *Bolt) Produces(streamNames ...string) *Bolt {
 	for _, streamName := range streamNames {
-		stream, ok := o.topology.GetStream(streamName)
-		if !ok {
-			stream = NewStream(streamName)
-			o.topology.AddStream(stream)
-		}
+		stream := o.topology.AddOrGetStream(streamName)
 
 		output := stream.RegisterProducer(o.name)
-		o.outputs = append(o.outputs, NewOutputPort(streamName, o.name, len(o.outputs), output))
+		op := NewOutputPort(streamName, o.name, len(o.outputs), output)
+		o.outputs = append(o.outputs, op)
+
+		o.metricsCollector.Register(op.tuplesSent)
 	}
 	return o
 }
@@ -87,11 +93,7 @@ func (o *Bolt) Produces(streamNames ...string) *Bolt {
 // use to receive tuples from upstream producers. It also allows users to
 // specify a custom partitioning function.
 func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, queueSize int) *Bolt {
-	stream, ok := o.topology.GetStream(streamName)
-	if !ok {
-		stream = NewStream(streamName)
-		o.topology.AddStream(stream)
-	}
+	stream := o.topology.AddOrGetStream(streamName)
 
 	input := stream.RegisterConsumer(o.name, queueSize)
 	o.inputs = append(o.inputs, NewInputPort(streamName, o.name, partition, o.parallelism, input))
@@ -102,11 +104,7 @@ func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, q
 // receive tuples from upstream producers. If the operator parallelism is
 // greater than one, round robin partitioning will automatically be used.
 func (o *Bolt) Consumes(streamName string, queueSize int) *Bolt {
-	stream, ok := o.topology.GetStream(streamName)
-	if !ok {
-		stream = NewStream(streamName)
-		o.topology.AddStream(stream)
-	}
+	stream := o.topology.AddOrGetStream(streamName)
 
 	var partition PartitionFunc
 	if o.parallelism > 1 {
@@ -139,10 +137,11 @@ func (o *Bolt) Run(ctx context.Context) {
 	for instance := 0; instance < o.parallelism; instance++ {
 		go func(instance int) {
 			oc := &OperatorContext{
-				name:     o.name,
-				instance: instance,
-				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
-				outputs:  o.outputs,
+				name:             o.name,
+				instance:         instance,
+				log:              NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
+				outputs:          o.outputs,
+				metricsCollector: o.metricsCollector,
 			}
 			oc.SetDebug(o.debug)
 			processor := o.createProcessor()

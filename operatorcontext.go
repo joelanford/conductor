@@ -1,12 +1,15 @@
 package conductor
 
+import "github.com/prometheus/client_golang/prometheus"
+
 // OperatorContext is passed to user-defined ProcessFunc and ProcessTupleFunc
 // functions to provide the operator name and tuple submission functionality.
 type OperatorContext struct {
-	name     string
-	instance int
-	log      InfoDebugLogger
-	outputs  []*OutputPort
+	name             string
+	instance         int
+	log              InfoDebugLogger
+	outputs          []*OutputPort
+	metricsCollector *OperatorCollector
 }
 
 // Name returns the name of the operator
@@ -41,6 +44,10 @@ func (o *OperatorContext) Submit(t *Tuple, port int) {
 // producer streams.
 func (o *OperatorContext) NumPorts() int {
 	return len(o.outputs)
+}
+
+func (o *OperatorContext) RegisterMetric(m prometheus.Collector) {
+	o.metricsCollector.Register(m)
 }
 
 func (o *OperatorContext) SetDebug(debug bool) {

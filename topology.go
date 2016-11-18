@@ -15,6 +15,7 @@ type Topology struct {
 	streams map[string]*Stream
 
 	debug bool
+	mutex sync.Mutex
 }
 
 // NewTopology creates a new Topology instance
@@ -28,22 +29,23 @@ func NewTopology(name string) *Topology {
 	}
 }
 
-func (t *Topology) AddStream(s *Stream) {
-	stream, ok := t.streams[s.Name()]
-	if !ok {
-		t.streams[s.Name()] = stream
-	}
-}
-
-func (t *Topology) GetStream(name string) (*Stream, bool) {
+func (t *Topology) AddOrGetStream(name string) *Stream {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	stream, ok := t.streams[name]
-	return stream, ok
+	if !ok {
+		stream = NewStream(name)
+		t.streams[name] = stream
+	}
+	return stream
 }
 
 // AddSpout creates and adds a new Spout instance to the
 // topology. This function returns a Spout instance, which is used
 // to declare the streams that the Spout instance produces.
 func (t *Topology) AddSpout(name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	o := NewSpout(t, name, createProcessor, parallelism)
 	t.spouts = append(t.spouts, o)
 	return o
@@ -53,6 +55,8 @@ func (t *Topology) AddSpout(name string, createProcessor CreateSpoutProcessorFun
 // function returns an Bolt instance, which is used to declare the streams
 // that the Bolt instance consumes and produces.
 func (t *Topology) AddBolt(name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	o := NewBolt(t, name, createProcessor, parallelism)
 	t.bolts = append(t.bolts, o)
 	return o

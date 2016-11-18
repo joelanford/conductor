@@ -43,16 +43,18 @@ type Spout struct {
 
 	topology *Topology
 
-	outputs []*OutputPort
+	outputs          []*OutputPort
+	metricsCollector *OperatorCollector
 }
 
 func NewSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
 	return &Spout{
-		name:            name,
-		createProcessor: createProcessor,
-		parallelism:     parallelism,
-		debug:           false,
-		topology:        t,
+		name:             name,
+		createProcessor:  createProcessor,
+		parallelism:      parallelism,
+		debug:            false,
+		topology:         t,
+		metricsCollector: NewOperatorCollector(),
 	}
 }
 
@@ -60,14 +62,13 @@ func NewSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc
 // it will use to send tuples to downstream consumers
 func (o *Spout) Produces(streamNames ...string) *Spout {
 	for _, streamName := range streamNames {
-		stream, ok := o.topology.GetStream(streamName)
-		if !ok {
-			stream = NewStream(streamName)
-			o.topology.AddStream(stream)
-		}
+		stream := o.topology.AddOrGetStream(streamName)
 
 		output := stream.RegisterProducer(o.name)
-		o.outputs = append(o.outputs, NewOutputPort(streamName, o.name, len(o.outputs), output))
+		op := NewOutputPort(streamName, o.name, len(o.outputs), output)
+		o.outputs = append(o.outputs, op)
+
+		o.metricsCollector.Register(op.tuplesSent)
 	}
 	return o
 }
@@ -84,10 +85,11 @@ func (o *Spout) Run(ctx context.Context) {
 	for instance := 0; instance < o.parallelism; instance++ {
 		go func(instance int) {
 			oc := &OperatorContext{
-				name:     o.name,
-				instance: instance,
-				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
-				outputs:  o.outputs,
+				name:             o.name,
+				instance:         instance,
+				log:              NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
+				outputs:          o.outputs,
+				metricsCollector: o.metricsCollector,
 			}
 			oc.SetDebug(o.debug)
 			processor := o.createProcessor()
