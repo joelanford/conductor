@@ -2,58 +2,86 @@ package conductor
 
 import "sync"
 
+type Consumer struct {
+	Name    string
+	Channel <-chan *Tuple
+}
+
+type Producer struct {
+	Name    string
+	Channel chan<- *Tuple
+}
+
 // Stream manages the distribution for a named stream of Tuple instances from
 // all stream producers to all stream consumers.
-type stream struct {
-	name string
-
-	// All operators that produce a stream will be assigned the same producer channel
-	producers map[string]*outputPort
-
-	// All operators that consume a stream will be assigned their own consumer channel
-	consumers map[string]*inputPort
+type Stream struct {
+	name      string
+	producers map[string]chan *Tuple
+	consumers map[string]chan *Tuple
 }
 
 // NewStream creates a new Stream instance.
-func newStream(name string) *stream {
-	return &stream{
+func NewStream(name string) *Stream {
+	return &Stream{
 		name:      name,
-		producers: make(map[string]*outputPort),
-		consumers: make(map[string]*inputPort),
+		producers: make(map[string]chan *Tuple),
+		consumers: make(map[string]chan *Tuple),
 	}
 }
 
-func (s *stream) registerConsumer(name string, partition PartitionFunc, parallelism, queueSize int) *inputPort {
+func (s *Stream) Name() string {
+	return s.name
+}
+
+func (s *Stream) RegisterConsumer(name string, queueSize int) chan *Tuple {
 	if _, present := s.consumers[name]; present {
-		panic("input port with name " + name + " already exists")
+		panic("consumer with name " + name + " already exists")
 	}
-	consumer := newInputPort(s.name, name, partition, parallelism, queueSize)
+	consumer := make(chan *Tuple, queueSize)
 	s.consumers[name] = consumer
 	return consumer
 }
 
-func (s *stream) registerProducer(name string, portNum int) *outputPort {
-	if _, present := s.producers[name]; present {
-		panic("output port with name " + name + " already exists")
+func (s *Stream) Consumers() []Consumer {
+	consumers := make([]Consumer, len(s.consumers))
+	i := 0
+	for name, channel := range s.consumers {
+		consumers[i] = Consumer{Name: name, Channel: channel}
+		i++
 	}
-	producer := newOutputPort(s.name, name, portNum)
+	return consumers
+}
+
+func (s *Stream) RegisterProducer(name string) chan *Tuple {
+	if _, present := s.producers[name]; present {
+		panic("producer with name " + name + " already exists")
+	}
+	producer := make(chan *Tuple)
 	s.producers[name] = producer
 	return producer
 }
 
-func (s *stream) run() {
+func (s *Stream) Producers() []Producer {
+	producers := make([]Producer, len(s.producers))
+	i := 0
+	for name, channel := range s.producers {
+		producers[i] = Producer{Name: name, Channel: channel}
+	}
+	return producers
+}
+
+func (s *Stream) Run() {
 	for tuple := range s.mergeProducers() {
 		for _, ip := range s.consumers {
-			ip.input <- tuple
+			ip <- tuple
 		}
 	}
 	for _, ip := range s.consumers {
-		close(ip.input)
+		close(ip)
 	}
-
 }
 
-func (s *stream) mergeProducers() <-chan *Tuple {
+func (s *Stream) mergeProducers() <-chan *Tuple {
 	var wg sync.WaitGroup
 	out := make(chan *Tuple)
 
@@ -67,7 +95,7 @@ func (s *stream) mergeProducers() <-chan *Tuple {
 	}
 	wg.Add(len(s.producers))
 	for _, p := range s.producers {
-		go output(p.channel())
+		go output(p)
 	}
 
 	// Start a goroutine to close out once all the output goroutines are

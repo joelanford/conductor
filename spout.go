@@ -43,10 +43,10 @@ type Spout struct {
 
 	topology *Topology
 
-	outputs []*outputPort
+	outputs []*OutputPort
 }
 
-func newSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
+func NewSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
 	return &Spout{
 		name:            name,
 		createProcessor: createProcessor,
@@ -60,12 +60,14 @@ func newSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc
 // it will use to send tuples to downstream consumers
 func (o *Spout) Produces(streamNames ...string) *Spout {
 	for _, streamName := range streamNames {
-		stream, ok := o.topology.streams[streamName]
+		stream, ok := o.topology.GetStream(streamName)
 		if !ok {
-			stream = newStream(streamName)
-			o.topology.streams[streamName] = stream
+			stream = NewStream(streamName)
+			o.topology.AddStream(stream)
 		}
-		o.outputs = append(o.outputs, stream.registerProducer(o.name, len(o.outputs)))
+
+		output := stream.RegisterProducer(o.name)
+		o.outputs = append(o.outputs, NewOutputPort(streamName, o.name, len(o.outputs), output))
 	}
 	return o
 }
@@ -76,7 +78,7 @@ func (o *Spout) SetDebug(debug bool) *Spout {
 	return o
 }
 
-func (o *Spout) run(ctx context.Context) {
+func (o *Spout) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Add(o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
@@ -87,7 +89,7 @@ func (o *Spout) run(ctx context.Context) {
 				log:      NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
 				outputs:  o.outputs,
 			}
-			oc.log.SetDebug(o.debug)
+			oc.SetDebug(o.debug)
 			processor := o.createProcessor()
 			processor.Setup(ctx, oc)
 			processor.Process(ctx)
@@ -98,6 +100,6 @@ func (o *Spout) run(ctx context.Context) {
 
 	wg.Wait()
 	for _, output := range o.outputs {
-		output.close()
+		output.Close()
 	}
 }
