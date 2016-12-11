@@ -1,6 +1,6 @@
 package conductor
 
-type InputPort struct {
+type inputPort struct {
 	streamName   string
 	operatorName string
 	input        chan *Tuple
@@ -8,7 +8,7 @@ type InputPort struct {
 	partition    PartitionFunc
 }
 
-func NewInputPort(streamName, operatorName string, partitionFunc PartitionFunc, parallelism int, input chan *Tuple) *InputPort {
+func newInputPort(streamName, operatorName string, partitionFunc PartitionFunc, parallelism int, input chan *Tuple) *inputPort {
 	outputs := make([]chan *Tuple, parallelism)
 	if parallelism == 1 {
 		outputs[0] = input
@@ -18,7 +18,7 @@ func NewInputPort(streamName, operatorName string, partitionFunc PartitionFunc, 
 		}
 	}
 
-	return &InputPort{
+	return &inputPort{
 		streamName:   streamName,
 		operatorName: operatorName,
 		input:        input,
@@ -27,7 +27,7 @@ func NewInputPort(streamName, operatorName string, partitionFunc PartitionFunc, 
 	}
 }
 
-func (i *InputPort) Run() {
+func (i *inputPort) run() {
 	if len(i.outputs) != 1 {
 		for t := range i.input {
 			i.outputs[i.partition(t)%len(i.outputs)] <- t
@@ -36,28 +36,4 @@ func (i *InputPort) Run() {
 			close(o)
 		}
 	}
-}
-
-func (i *InputPort) Input() chan<- *Tuple {
-	return i.input
-}
-
-func (i *InputPort) Output(output int) <-chan *Tuple {
-	return i.outputs[output]
-}
-
-func (i *InputPort) NumOutputs() int {
-	return len(i.outputs)
-}
-
-func (i *InputPort) Close() {
-	close(i.input)
-}
-
-func (i *InputPort) OperatorName() string {
-	return i.operatorName
-}
-
-func (i *InputPort) StreamName() string {
-	return i.streamName
 }

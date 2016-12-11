@@ -8,7 +8,7 @@ type OperatorContext struct {
 	name             string
 	instance         int
 	log              InfoDebugLogger
-	outputs          []*OutputPort
+	outputs          []*outputPort
 	metricsCollector *OperatorCollector
 }
 
@@ -33,10 +33,10 @@ func (o *OperatorContext) Log() InfoDebugLogger {
 // an undefined port will result in a panic.
 func (o *OperatorContext) Submit(t *Tuple, port int) {
 	op := o.outputs[port]
-	t.Metadata.StreamName = op.StreamName()
+	t.Metadata.StreamName = op.streamName
 	t.Metadata.Producer = o.name
 	t.Metadata.Instance = o.instance
-	op.Submit(t)
+	op.output <- t
 }
 
 // NumPorts returns the number of output ports defined in the topology. This

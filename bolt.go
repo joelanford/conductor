@@ -46,14 +46,14 @@ type Bolt struct {
 
 	topology *Topology
 
-	inputs  []*InputPort
-	outputs []*OutputPort
+	inputs  []*inputPort
+	outputs []*outputPort
 
 	tuplesReceived   *prometheus.CounterVec
 	metricsCollector *OperatorCollector
 }
 
-func NewBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
+func newBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
 	tuplesReceived := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "conductor",
 		Name:      "tuples_received_total",
@@ -76,12 +76,10 @@ func NewBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, 
 
 // Produces is used to register streams to the Bolt, which
 // it will use to send tuples to downstream consumers
-func (o *Bolt) Produces(streamNames ...string) *Bolt {
-	for _, streamName := range streamNames {
-		stream := o.topology.AddOrGetStream(streamName)
-
-		output := stream.RegisterProducer(o.name)
-		op := NewOutputPort(streamName, o.name, len(o.outputs), output)
+func (o *Bolt) Produces(streams ...*Stream) *Bolt {
+	for _, stream := range streams {
+		output := stream.registerProducer(o.name)
+		op := newOutputPort(stream.Name(), o.name, len(o.outputs), output)
 		o.outputs = append(o.outputs, op)
 
 		o.metricsCollector.Register(op.tuplesSent)
@@ -92,27 +90,23 @@ func (o *Bolt) Produces(streamNames ...string) *Bolt {
 // ConsumesPartitioned is used to register streams to the Bolt, which it will
 // use to receive tuples from upstream producers. It also allows users to
 // specify a custom partitioning function.
-func (o *Bolt) ConsumesPartitioned(streamName string, partition PartitionFunc, queueSize int) *Bolt {
-	stream := o.topology.AddOrGetStream(streamName)
-
-	input := stream.RegisterConsumer(o.name, queueSize)
-	o.inputs = append(o.inputs, NewInputPort(streamName, o.name, partition, o.parallelism, input))
+func (o *Bolt) ConsumesPartitioned(stream *Stream, partition PartitionFunc, queueSize int) *Bolt {
+	input := stream.registerConsumer(o.name, queueSize)
+	o.inputs = append(o.inputs, newInputPort(stream.Name(), o.name, partition, o.parallelism, input))
 	return o
 }
 
 // Consumes is used to register streams to the Bolt, which it will use to
 // receive tuples from upstream producers. If the operator parallelism is
 // greater than one, round robin partitioning will automatically be used.
-func (o *Bolt) Consumes(streamName string, queueSize int) *Bolt {
-	stream := o.topology.AddOrGetStream(streamName)
-
+func (o *Bolt) Consumes(stream *Stream, queueSize int) *Bolt {
 	var partition PartitionFunc
 	if o.parallelism > 1 {
 		partition = PartitionRoundRobin()
 	}
-	input := stream.RegisterConsumer(o.name, queueSize)
+	input := stream.registerConsumer(o.name, queueSize)
 
-	o.inputs = append(o.inputs, NewInputPort(streamName, o.name, partition, o.parallelism, input))
+	o.inputs = append(o.inputs, newInputPort(stream.Name(), o.name, partition, o.parallelism, input))
 	return o
 }
 
@@ -122,13 +116,13 @@ func (o *Bolt) SetDebug(debug bool) *Bolt {
 	return o
 }
 
-func (o *Bolt) Run(ctx context.Context) {
+func (o *Bolt) run(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	wg.Add(len(o.inputs))
 	for _, ip := range o.inputs {
-		go func(ip *InputPort) {
-			ip.Run()
+		go func(ip *inputPort) {
+			ip.run()
 			wg.Done()
 		}(ip)
 	}
@@ -150,9 +144,9 @@ func (o *Bolt) Run(ctx context.Context) {
 			var inputWg sync.WaitGroup
 			inputWg.Add(len(o.inputs))
 			for portNum, ip := range o.inputs {
-				go func(ip *InputPort, portNum int) {
-					for tuple := range ip.Output(instance) {
-						o.tuplesReceived.WithLabelValues(o.name, ip.StreamName(), strconv.Itoa(portNum)).Inc()
+				go func(ip *inputPort, portNum int) {
+					for tuple := range ip.outputs[instance] {
+						o.tuplesReceived.WithLabelValues(o.name, ip.streamName, strconv.Itoa(portNum)).Inc()
 						processor.Process(ctx, tuple, portNum)
 					}
 					inputWg.Done()
@@ -166,6 +160,6 @@ func (o *Bolt) Run(ctx context.Context) {
 
 	wg.Wait()
 	for _, output := range o.outputs {
-		output.Close()
+		close(output.output)
 	}
 }

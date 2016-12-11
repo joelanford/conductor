@@ -29,7 +29,7 @@ func NewTopology(name string) *Topology {
 	}
 }
 
-func (t *Topology) AddOrGetStream(name string) *Stream {
+func (t *Topology) AddStream(name string) *Stream {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	stream, ok := t.streams[name]
@@ -46,7 +46,7 @@ func (t *Topology) AddOrGetStream(name string) *Stream {
 func (t *Topology) AddSpout(name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	o := NewSpout(t, name, createProcessor, parallelism)
+	o := newSpout(t, name, createProcessor, parallelism)
 	t.spouts = append(t.spouts, o)
 	return o
 }
@@ -57,7 +57,7 @@ func (t *Topology) AddSpout(name string, createProcessor CreateSpoutProcessorFun
 func (t *Topology) AddBolt(name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	o := NewBolt(t, name, createProcessor, parallelism)
+	o := newBolt(t, name, createProcessor, parallelism)
 	t.bolts = append(t.bolts, o)
 	return o
 }
@@ -76,7 +76,7 @@ func (t *Topology) Run(ctx context.Context) error {
 	wg.Add(len(t.streams))
 	for _, s := range t.streams {
 		go func(s *Stream) {
-			s.Run()
+			s.run()
 			wg.Done()
 		}(s)
 	}
@@ -88,7 +88,7 @@ func (t *Topology) Run(ctx context.Context) error {
 			if t.debug {
 				o.SetDebug(true)
 			}
-			o.Run(ctx)
+			o.run(ctx)
 			wg.Done()
 		}(o)
 	}
@@ -100,7 +100,7 @@ func (t *Topology) Run(ctx context.Context) error {
 			if t.debug {
 				o.SetDebug(true)
 			}
-			o.Run(ctx)
+			o.run(ctx)
 			wg.Done()
 		}(o)
 	}

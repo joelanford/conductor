@@ -43,11 +43,11 @@ type Spout struct {
 
 	topology *Topology
 
-	outputs          []*OutputPort
+	outputs          []*outputPort
 	metricsCollector *OperatorCollector
 }
 
-func NewSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
+func newSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
 	return &Spout{
 		name:             name,
 		createProcessor:  createProcessor,
@@ -60,12 +60,10 @@ func NewSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc
 
 // Produces is used to register streams to the Spout, which
 // it will use to send tuples to downstream consumers
-func (o *Spout) Produces(streamNames ...string) *Spout {
-	for _, streamName := range streamNames {
-		stream := o.topology.AddOrGetStream(streamName)
-
-		output := stream.RegisterProducer(o.name)
-		op := NewOutputPort(streamName, o.name, len(o.outputs), output)
+func (o *Spout) Produces(streams ...*Stream) *Spout {
+	for _, stream := range streams {
+		output := stream.registerProducer(o.name)
+		op := newOutputPort(stream.Name(), o.name, len(o.outputs), output)
 		o.outputs = append(o.outputs, op)
 
 		o.metricsCollector.Register(op.tuplesSent)
@@ -79,7 +77,7 @@ func (o *Spout) SetDebug(debug bool) *Spout {
 	return o
 }
 
-func (o *Spout) Run(ctx context.Context) {
+func (o *Spout) run(ctx context.Context) {
 	var wg sync.WaitGroup
 	wg.Add(o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
@@ -102,6 +100,6 @@ func (o *Spout) Run(ctx context.Context) {
 
 	wg.Wait()
 	for _, output := range o.outputs {
-		output.Close()
+		close(output.output)
 	}
 }
