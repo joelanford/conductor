@@ -1,4 +1,4 @@
-package conductor
+package streams
 
 // Tuple is the type of the struct instance that is transmitted between
 // Topology operators. It contains Metadata, set by the Topology fabric,

@@ -1,4 +1,4 @@
-package conductor
+package streams
 
 import "github.com/prometheus/client_golang/prometheus"
 

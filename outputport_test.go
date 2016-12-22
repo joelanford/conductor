@@ -1,37 +1,36 @@
-package conductor_test
+package streams
 
 import (
 	"testing"
 
-	"github.com/joelanford/conductor"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestOutputPort(t *testing.T) {
-	output := make(chan *conductor.Tuple, 1)
-	op := conductor.NewOutputPort("stream", "operator", 0, output)
+	output := make(chan *Tuple, 1)
+	op := newOutputPort("stream", "operator", 0, output)
 
-	assert.Equal(t, "stream", op.StreamName())
-	assert.Equal(t, "operator", op.OperatorName())
+	assert.Equal(t, "stream", op.streamName)
+	assert.Equal(t, "operator", op.operatorName)
 
 	for i := 0; i < 100; i++ {
-		in := &conductor.Tuple{Data: map[string]interface{}{"value": i}}
-		op.Submit(in)
+		in := &Tuple{Data: map[string]interface{}{"value": i}}
+		op.output <- in
 		out := <-output
 		assert.Equal(t, in, out)
 	}
-	op.Close()
+	close(op.output)
 }
 
 func BenchmarkOutputPort(b *testing.B) {
-	in := &conductor.Tuple{Data: map[string]interface{}{"value": 1}}
-	output := make(chan *conductor.Tuple, 1)
-	op := conductor.NewOutputPort("stream", "operator", 0, output)
+	in := &Tuple{Data: map[string]interface{}{"value": 1}}
+	output := make(chan *Tuple, 1)
+	op := newOutputPort("stream", "operator", 0, output)
 
 	for i := 0; i < b.N; i++ {
-		op.Submit(in)
+		op.output <- in
 		<-output
 	}
-	op.Close()
+	close(op.output)
 
 }

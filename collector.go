@@ -1,4 +1,4 @@
-package conductor
+package streams
 
 import (
 	"sync"

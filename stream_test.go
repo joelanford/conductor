@@ -1,22 +1,21 @@
-package conductor_test
+package streams
 
 import (
 	"testing"
 
-	"github.com/joelanford/conductor"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestStreamOneToOne(t *testing.T) {
-	s := conductor.NewStream("test")
-	p := s.RegisterProducer("p")
-	c := s.RegisterConsumer("c", 0)
-	tuple := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
+	s := NewStream("test")
+	p := s.registerProducer("p")
+	c := s.registerConsumer("c", 0)
+	tuple := &Tuple{Data: map[string]interface{}{"a": 1}}
 
-	assert.Equal(t, 1, len(s.Producers()))
-	assert.Equal(t, 1, len(s.Consumers()))
+	assert.Equal(t, 1, len(s.producers))
+	assert.Equal(t, 1, len(s.consumers))
 
-	go s.Run()
+	go s.run()
 
 	p <- tuple
 	close(p)
@@ -25,17 +24,17 @@ func TestStreamOneToOne(t *testing.T) {
 }
 
 func TestStreamOneToMany(t *testing.T) {
-	s := conductor.NewStream("test")
-	p := s.RegisterProducer("p")
-	c1 := s.RegisterConsumer("c1", 0)
-	c2 := s.RegisterConsumer("c2", 0)
-	c3 := s.RegisterConsumer("c3", 0)
-	tuple1 := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
+	s := NewStream("test")
+	p := s.registerProducer("p")
+	c1 := s.registerConsumer("c1", 0)
+	c2 := s.registerConsumer("c2", 0)
+	c3 := s.registerConsumer("c3", 0)
+	tuple1 := &Tuple{Data: map[string]interface{}{"a": 1}}
 
-	assert.Equal(t, 1, len(s.Producers()))
-	assert.Equal(t, 3, len(s.Consumers()))
+	assert.Equal(t, 1, len(s.producers))
+	assert.Equal(t, 3, len(s.consumers))
 
-	go s.Run()
+	go s.run()
 
 	p <- tuple1
 	close(p)
@@ -52,19 +51,19 @@ func TestStreamOneToMany(t *testing.T) {
 }
 
 func TestStreamManyToOne(t *testing.T) {
-	s := conductor.NewStream("test")
-	p1 := s.RegisterProducer("p1")
-	p2 := s.RegisterProducer("p2")
-	p3 := s.RegisterProducer("p3")
-	c := s.RegisterConsumer("c", 0)
-	tuple1 := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
-	tuple2 := &conductor.Tuple{Data: map[string]interface{}{"a": 2}}
-	tuple3 := &conductor.Tuple{Data: map[string]interface{}{"a": 3}}
+	s := NewStream("test")
+	p1 := s.registerProducer("p1")
+	p2 := s.registerProducer("p2")
+	p3 := s.registerProducer("p3")
+	c := s.registerConsumer("c", 0)
+	tuple1 := &Tuple{Data: map[string]interface{}{"a": 1}}
+	tuple2 := &Tuple{Data: map[string]interface{}{"a": 2}}
+	tuple3 := &Tuple{Data: map[string]interface{}{"a": 3}}
 
-	assert.Equal(t, 3, len(s.Producers()))
-	assert.Equal(t, 1, len(s.Consumers()))
+	assert.Equal(t, 3, len(s.producers))
+	assert.Equal(t, 1, len(s.consumers))
 
-	go s.Run()
+	go s.run()
 
 	p1 <- tuple1
 	close(p1)
@@ -80,21 +79,21 @@ func TestStreamManyToOne(t *testing.T) {
 }
 
 func TestStreamManyToMany(t *testing.T) {
-	s := conductor.NewStream("test")
-	p1 := s.RegisterProducer("p1")
-	p2 := s.RegisterProducer("p2")
-	p3 := s.RegisterProducer("p3")
-	c1 := s.RegisterConsumer("c1", 0)
-	c2 := s.RegisterConsumer("c2", 0)
-	c3 := s.RegisterConsumer("c3", 0)
-	tuple1 := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
-	tuple2 := &conductor.Tuple{Data: map[string]interface{}{"a": 2}}
-	tuple3 := &conductor.Tuple{Data: map[string]interface{}{"a": 3}}
+	s := NewStream("test")
+	p1 := s.registerProducer("p1")
+	p2 := s.registerProducer("p2")
+	p3 := s.registerProducer("p3")
+	c1 := s.registerConsumer("c1", 0)
+	c2 := s.registerConsumer("c2", 0)
+	c3 := s.registerConsumer("c3", 0)
+	tuple1 := &Tuple{Data: map[string]interface{}{"a": 1}}
+	tuple2 := &Tuple{Data: map[string]interface{}{"a": 2}}
+	tuple3 := &Tuple{Data: map[string]interface{}{"a": 3}}
 
-	assert.Equal(t, 3, len(s.Producers()))
-	assert.Equal(t, 3, len(s.Consumers()))
+	assert.Equal(t, 3, len(s.producers))
+	assert.Equal(t, 3, len(s.consumers))
 
-	go s.Run()
+	go s.run()
 
 	p1 <- tuple1
 	close(p1)
@@ -137,12 +136,12 @@ func TestStreamManyToMany(t *testing.T) {
 }
 
 func BenchmarkStream(b *testing.B) {
-	s := conductor.NewStream("test")
-	p := s.RegisterProducer("p")
-	c := s.RegisterConsumer("c", 100)
-	tuple := &conductor.Tuple{Data: map[string]interface{}{"a": 1}}
+	s := NewStream("test")
+	p := s.registerProducer("p")
+	c := s.registerConsumer("c", 100)
+	tuple := &Tuple{Data: map[string]interface{}{"a": 1}}
 
-	go s.Run()
+	go s.run()
 
 	for i := 0; i < b.N; i++ {
 		p <- tuple

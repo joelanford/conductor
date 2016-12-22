@@ -1,4 +1,4 @@
-package conductor
+package streams
 
 import (
 	"context"
@@ -55,9 +55,9 @@ type Bolt struct {
 
 func newBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
 	tuplesReceived := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "conductor",
+		Namespace: "streams",
 		Name:      "tuples_received_total",
-		Help:      "The total number of tuples recevied by an operator in a conductor topology",
+		Help:      "The total number of tuples recevied by an operator in a streams topology",
 	}, []string{"operator", "stream", "port"})
 
 	metricsCollector := NewOperatorCollector()

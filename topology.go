@@ -1,11 +1,11 @@
-package conductor
+package streams
 
 import (
 	"context"
 	"sync"
 )
 
-// Topology is the top-level entry point of Conductor.  It is used to create
+// Topology is the top-level entry point of streams.  It is used to create
 // stream processing pipelines consisting of Spout and Bolt
 // instances connected by Stream instances.
 type Topology struct {

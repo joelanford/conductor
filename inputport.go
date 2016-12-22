@@ -1,4 +1,4 @@
-package conductor
+package streams
 
 type inputPort struct {
 	streamName   string

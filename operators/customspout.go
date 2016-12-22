@@ -3,25 +3,25 @@ package operators
 import (
 	"context"
 
-	"github.com/joelanford/conductor"
+	"github.com/joelanford/streams"
 )
 
-type CustomSpoutFunc func(context.Context, *conductor.OperatorContext)
+type CustomSpoutFunc func(context.Context, *streams.OperatorContext)
 
 type CustomSpout struct {
 	process CustomSpoutFunc
-	oc      *conductor.OperatorContext
+	oc      *streams.OperatorContext
 }
 
-func NewCustomSpout(customSpout CustomSpoutFunc) conductor.CreateSpoutProcessorFunc {
-	return func() conductor.SpoutProcessor {
+func NewCustomSpout(customSpout CustomSpoutFunc) streams.CreateSpoutProcessorFunc {
+	return func() streams.SpoutProcessor {
 		return &CustomSpout{
 			process: customSpout,
 		}
 	}
 }
 
-func (s *CustomSpout) Setup(ctx context.Context, oc *conductor.OperatorContext) {
+func (s *CustomSpout) Setup(ctx context.Context, oc *streams.OperatorContext) {
 	s.oc = oc
 }
 

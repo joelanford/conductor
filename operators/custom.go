@@ -3,29 +3,29 @@ package operators
 import (
 	"context"
 
-	"github.com/joelanford/conductor"
+	"github.com/joelanford/streams"
 )
 
-type CustomFunc func(*conductor.OperatorContext, *conductor.Tuple, int)
+type CustomFunc func(*streams.OperatorContext, *streams.Tuple, int)
 
 type Custom struct {
-	oc     *conductor.OperatorContext
+	oc     *streams.OperatorContext
 	custom CustomFunc
 }
 
-func NewCustom(custom CustomFunc) conductor.CreateBoltProcessorFunc {
-	return func() conductor.BoltProcessor {
+func NewCustom(custom CustomFunc) streams.CreateBoltProcessorFunc {
+	return func() streams.BoltProcessor {
 		return &Custom{
 			custom: custom,
 		}
 	}
 }
 
-func (b *Custom) Setup(ctx context.Context, oc *conductor.OperatorContext) {
+func (b *Custom) Setup(ctx context.Context, oc *streams.OperatorContext) {
 	b.oc = oc
 }
 
-func (b *Custom) Process(ctx context.Context, t *conductor.Tuple, port int) {
+func (b *Custom) Process(ctx context.Context, t *streams.Tuple, port int) {
 	b.custom(b.oc, t, port)
 }
 

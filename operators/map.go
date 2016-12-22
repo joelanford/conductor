@@ -3,29 +3,29 @@ package operators
 import (
 	"context"
 
-	"github.com/joelanford/conductor"
+	"github.com/joelanford/streams"
 )
 
-type MapFunc func(*conductor.Tuple) *conductor.Tuple
+type MapFunc func(*streams.Tuple) *streams.Tuple
 
 type Map struct {
-	oc     *conductor.OperatorContext
+	oc     *streams.OperatorContext
 	mapper MapFunc
 }
 
-func NewMap(mapper MapFunc) conductor.CreateBoltProcessorFunc {
-	return func() conductor.BoltProcessor {
+func NewMap(mapper MapFunc) streams.CreateBoltProcessorFunc {
+	return func() streams.BoltProcessor {
 		return &Map{
 			mapper: mapper,
 		}
 	}
 }
 
-func (b *Map) Setup(ctx context.Context, oc *conductor.OperatorContext) {
+func (b *Map) Setup(ctx context.Context, oc *streams.OperatorContext) {
 	b.oc = oc
 }
 
-func (b *Map) Process(ctx context.Context, t *conductor.Tuple, port int) {
+func (b *Map) Process(ctx context.Context, t *streams.Tuple, port int) {
 	b.oc.Submit(b.mapper(t), 0)
 }
 

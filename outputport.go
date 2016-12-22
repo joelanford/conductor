@@ -1,4 +1,4 @@
-package conductor
+package streams
 
 import "github.com/prometheus/client_golang/prometheus"
 
@@ -18,9 +18,9 @@ func newOutputPort(streamName, operatorName string, portNum int, output chan *Tu
 		portNum:      portNum,
 		output:       output,
 		tuplesSent: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "conductor",
+			Namespace: "streams",
 			Name:      "tuples_sent_total",
-			Help:      "The total number of tuples sent by an operator in a conductor topology",
+			Help:      "The total number of tuples sent by an operator in a streams topology",
 		}, []string{"operator", "stream", "port"}),
 	}
 }
