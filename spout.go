@@ -44,7 +44,7 @@ type Spout struct {
 	topology *Topology
 
 	outputs          []*outputPort
-	metricsCollector *OperatorCollector
+	metricsCollector *OperatorMetricsCollector
 }
 
 func newSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc, parallelism int) *Spout {
@@ -54,7 +54,7 @@ func newSpout(t *Topology, name string, createProcessor CreateSpoutProcessorFunc
 		parallelism:      parallelism,
 		debug:            false,
 		topology:         t,
-		metricsCollector: NewOperatorCollector(),
+		metricsCollector: NewOperatorMetricsCollector(),
 	}
 }
 

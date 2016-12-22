@@ -6,18 +6,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type OperatorCollector struct {
+type OperatorMetricsCollector struct {
 	metrics []prometheus.Collector
 	mutex   sync.Mutex
 }
 
-func NewOperatorCollector() *OperatorCollector {
-	return &OperatorCollector{
+func NewOperatorMetricsCollector() *OperatorMetricsCollector {
+	return &OperatorMetricsCollector{
 		metrics: make([]prometheus.Collector, 0),
 	}
 }
 
-func (oc *OperatorCollector) Describe(ch chan<- *prometheus.Desc) {
+func (oc *OperatorMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 	oc.mutex.Lock()
 	defer oc.mutex.Unlock()
 	for _, m := range oc.metrics {
@@ -25,7 +25,7 @@ func (oc *OperatorCollector) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
-func (oc *OperatorCollector) Collect(ch chan<- prometheus.Metric) {
+func (oc *OperatorMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	oc.mutex.Lock()
 	defer oc.mutex.Unlock()
 	for _, m := range oc.metrics {
@@ -33,7 +33,7 @@ func (oc *OperatorCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func (oc *OperatorCollector) Register(c prometheus.Collector) {
+func (oc *OperatorMetricsCollector) Register(c prometheus.Collector) {
 	oc.mutex.Lock()
 	defer oc.mutex.Unlock()
 	oc.metrics = append(oc.metrics, c)

@@ -16,12 +16,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func main() {
-	graphFile := flag.String("g", "", "Create GraphViz specified file instead of running the topology")
-	flag.Parse()
-
-	even := func(ctx context.Context, oc *streams.OperatorContext) {
-		i := 0
+func numProducer(start, increment int) operators.CustomSpoutFunc {
+	return func(ctx context.Context, oc *streams.OperatorContext) {
+		i := start
 		counter := prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "speed",
 			Name:      "numbers_generated_even_total",
@@ -38,55 +35,34 @@ func main() {
 				}
 				counter.WithLabelValues(oc.Name(), strconv.Itoa(oc.Instance())).Inc()
 				oc.Submit(&streams.Tuple{Data: streams.TupleData{"i": i}}, 0)
-				i = i + 2
-
+				i = i + increment
 			}
 		}
 	}
+}
 
-	odd := func(ctx context.Context, oc *streams.OperatorContext) {
-		i := 1
-		counter := prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "speed",
-			Name:      "numbers_generated_odd_total",
-			Help:      "Counter for the total number of even numbers generated",
-		}, []string{"operator", "instance"})
-		oc.RegisterMetric(counter)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				if i > 9999999999 {
-					return
-				}
-				counter.WithLabelValues(oc.Name(), strconv.Itoa(oc.Instance())).Inc()
-				oc.Submit(&streams.Tuple{Data: streams.TupleData{"i": i}}, 0)
-				i = i + 2
-			}
-		}
-	}
+func filter(t *streams.Tuple) bool {
+	return t.Data["i"].(int)%2 == 0
+}
 
-	filter := func(t *streams.Tuple) bool {
-		return t.Data["i"].(int)%2 == 0
-	}
+func printer(oc *streams.OperatorContext, t *streams.Tuple, port int) {
+	oc.Log().Infoln(t.Metadata, t.Data)
+}
 
-	printer := func(oc *streams.OperatorContext, t *streams.Tuple, port int) {
-		oc.Log().Infoln(t.Metadata, t.Data)
-	}
+func main() {
+	graphFile := flag.String("g", "", "Create GraphViz specified file instead of running the topology")
+	flag.Parse()
 
-	t := streams.NewTopology("speed")
+	t := streams.NewTopology("numbers")
 
 	evenNumbers := t.AddStream("evenNumbers")
 	oddNumbers := t.AddStream("oddNumbers")
 	filtered := t.AddStream("filtered")
 
-	t.AddSpout("evenSource", operators.NewCustomSpout(even), 1).Produces(evenNumbers)
-	t.AddSpout("oddSource", operators.NewCustomSpout(odd), 1).Produces(oddNumbers)
-	//t.AddBolt("unfilteredPrinter", operators.NewCustom(printer), 1).Consumes(evenNumbers, 0).Consumes(oddNumbers, 0)
+	t.AddSpout("evenSource", operators.NewCustomSpout(numProducer(0, 2)), 1).Produces(evenNumbers)
+	t.AddSpout("oddSource", operators.NewCustomSpout(numProducer(1, 2)), 1).Produces(oddNumbers)
 	t.AddBolt("filter", operators.NewFilter(filter), 10).Consumes(evenNumbers, 1).Consumes(oddNumbers, 1).Produces(filtered)
-	t.AddBolt("filteredPrinter", operators.NewCustom(printer), 1).Consumes(filtered, 0)
-	//t.AddBolt("allPrinter", operators.NewCustom(printer), 1).Consumes(evenNumbers, 1).Consumes(oddNumbers, 1).Consumes(filtered, 1)
+	t.AddBolt("filteredPrinter", operators.NewTupleLogger(), 1).Consumes(filtered, 0)
 
 	if *graphFile != "" {
 		t.CreateGraphFile(*graphFile)
@@ -104,7 +80,7 @@ func main() {
 			wg.Done()
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*600)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 		t.Run(ctx)
 
 		manners.Close()
