@@ -6,44 +6,44 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type OperatorMetricsCollector struct {
+type MetricsCollector struct {
 	metrics []prometheus.Collector
 	mutex   sync.Mutex
 }
 
-func NewOperatorMetricsCollector() *OperatorMetricsCollector {
-	return &OperatorMetricsCollector{
+func NewMetricsCollector() *MetricsCollector {
+	return &MetricsCollector{
 		metrics: make([]prometheus.Collector, 0),
 	}
 }
 
-func (oc *OperatorMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
-	oc.mutex.Lock()
-	defer oc.mutex.Unlock()
-	for _, m := range oc.metrics {
+func (mc *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
+	mc.mutex.Lock()
+	defer mc.mutex.Unlock()
+	for _, m := range mc.metrics {
 		m.Describe(ch)
 	}
 }
 
-func (oc *OperatorMetricsCollector) Collect(ch chan<- prometheus.Metric) {
-	oc.mutex.Lock()
-	defer oc.mutex.Unlock()
-	for _, m := range oc.metrics {
+func (mc *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
+	mc.mutex.Lock()
+	defer mc.mutex.Unlock()
+	for _, m := range mc.metrics {
 		m.Collect(ch)
 	}
 }
 
-func (oc *OperatorMetricsCollector) Register(c prometheus.Collector) {
-	oc.mutex.Lock()
-	defer oc.mutex.Unlock()
-	oc.metrics = append(oc.metrics, c)
+func (mc *MetricsCollector) Register(c prometheus.Collector) {
+	mc.mutex.Lock()
+	defer mc.mutex.Unlock()
+	mc.metrics = append(mc.metrics, c)
 }
 
 type TopologyCollector struct {
 	topology *Topology
 }
 
-func (t *Topology) NewPrometheusCollector() *TopologyCollector {
+func (t *Topology) Collector() *TopologyCollector {
 	return &TopologyCollector{
 		topology: t,
 	}

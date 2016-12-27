@@ -50,7 +50,7 @@ type Bolt struct {
 	outputs []*outputPort
 
 	tuplesReceived   *prometheus.CounterVec
-	metricsCollector *OperatorMetricsCollector
+	metricsCollector *MetricsCollector
 }
 
 func newBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, parallelism int) *Bolt {
@@ -60,7 +60,7 @@ func newBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, 
 		Help:      "The total number of tuples recevied by an operator in a streams topology",
 	}, []string{"operator", "stream", "port"})
 
-	metricsCollector := NewOperatorMetricsCollector()
+	metricsCollector := NewMetricsCollector()
 	metricsCollector.Register(tuplesReceived)
 
 	return &Bolt{

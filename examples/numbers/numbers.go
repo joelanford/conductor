@@ -69,7 +69,7 @@ func main() {
 	} else {
 		var wg sync.WaitGroup
 		prometheus.MustRegister(prometheus.NewProcessCollector(os.Getpid(), "streams"))
-		prometheus.MustRegister(t.NewPrometheusCollector())
+		prometheus.MustRegister(t.Collector())
 
 		r := http.NewServeMux()
 		r.Handle("/metrics", prometheus.Handler())

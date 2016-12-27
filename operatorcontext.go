@@ -9,7 +9,7 @@ type OperatorContext struct {
 	instance         int
 	log              InfoDebugLogger
 	outputs          []*outputPort
-	metricsCollector *OperatorMetricsCollector
+	metricsCollector *MetricsCollector
 }
 
 // Name returns the name of the operator
