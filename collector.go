@@ -38,33 +38,3 @@ func (mc *MetricsCollector) Register(c prometheus.Collector) {
 	defer mc.mutex.Unlock()
 	mc.metrics = append(mc.metrics, c)
 }
-
-type TopologyCollector struct {
-	topology *Topology
-}
-
-func (t *Topology) Collector() *TopologyCollector {
-	return &TopologyCollector{
-		topology: t,
-	}
-}
-
-func (tc *TopologyCollector) Describe(ch chan<- *prometheus.Desc) {
-	for _, bolt := range tc.topology.bolts {
-		bolt.metricsCollector.Describe(ch)
-	}
-	for _, spout := range tc.topology.spouts {
-		spout.metricsCollector.Describe(ch)
-	}
-}
-
-func (tc *TopologyCollector) Collect(ch chan<- prometheus.Metric) {
-	for _, bolt := range tc.topology.bolts {
-		bolt.metricsCollector.Collect(ch)
-
-	}
-	for _, spout := range tc.topology.spouts {
-		spout.metricsCollector.Collect(ch)
-
-	}
-}

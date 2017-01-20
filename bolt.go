@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"sync"
 
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -58,7 +60,7 @@ func newBolt(t *Topology, name string, createProcessor CreateBoltProcessorFunc, 
 		Namespace: "streams",
 		Name:      "tuples_received_total",
 		Help:      "The total number of tuples recevied by an operator in a streams topology",
-	}, []string{"operator", "stream", "port"})
+	}, []string{"operator", "instance", "stream", "port"})
 
 	metricsCollector := NewMetricsCollector()
 	metricsCollector.Register(tuplesReceived)
@@ -130,30 +132,42 @@ func (o *Bolt) run(ctx context.Context) {
 	wg.Add(o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
 		go func(instance int) {
-			oc := &OperatorContext{
-				name:             o.name,
-				instance:         instance,
-				log:              NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
-				outputs:          o.outputs,
-				metricsCollector: o.metricsCollector,
-			}
+			oc := newOperatorContext(
+				o.name,
+				instance,
+				NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
+				o.outputs,
+				o.metricsCollector,
+			)
 			oc.SetDebug(o.debug)
 			processor := o.createProcessor()
 			processor.Setup(ctx, oc)
 
 			var inputWg sync.WaitGroup
+			instanceStr := strconv.Itoa(instance)
 			inputWg.Add(len(o.inputs))
 			for portNum, ip := range o.inputs {
 				go func(ip *inputPort, portNum int) {
+					rcvMetricTicker := time.NewTicker(500 * time.Millisecond)
+					rcvMetricDelta := 0.0
+					portNumStr := strconv.Itoa(portNum)
 					for tuple := range ip.outputs[instance] {
-						o.tuplesReceived.WithLabelValues(o.name, ip.streamName, strconv.Itoa(portNum)).Inc()
+						rcvMetricDelta++
+						select {
+						case <-rcvMetricTicker.C:
+							o.tuplesReceived.WithLabelValues(o.name, instanceStr, ip.streamName, portNumStr).Add(rcvMetricDelta)
+							rcvMetricDelta = 0.0
+						default:
+						}
 						processor.Process(ctx, tuple, portNum)
 					}
+					rcvMetricTicker.Stop()
 					inputWg.Done()
 				}(ip, portNum)
 			}
 			inputWg.Wait()
 			processor.Teardown()
+			oc.sendMetricTicker.Stop()
 			wg.Done()
 		}(instance)
 	}

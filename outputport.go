@@ -21,6 +21,6 @@ func newOutputPort(streamName, operatorName string, portNum int, output chan *Tu
 			Namespace: "streams",
 			Name:      "tuples_sent_total",
 			Help:      "The total number of tuples sent by an operator in a streams topology",
-		}, []string{"operator", "stream", "port"}),
+		}, []string{"operator", "instance", "stream", "port"}),
 	}
 }

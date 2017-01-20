@@ -1,5 +1,26 @@
 package streams
 
+// var tuplePool sync.Pool
+
+// func init() {
+// 	tuplePool = sync.Pool{
+// 		New: func() interface{} {
+// 			return &Tuple{
+// 				Metadata: TupleMetadata{},
+// 				Data:     TupleData{},
+// 			}
+// 		},
+// 	}
+// }
+
+// func CreateTuple() *Tuple {
+// 	return tuplePool.Get().(*Tuple)
+// }
+
+// func ReturnTuple(t *Tuple) {
+// 	tuplePool.Put(t)
+// }
+
 // Tuple is the type of the struct instance that is transmitted between
 // Topology operators. It contains Metadata, set by the Topology fabric,
 // and Data, which contains user-defined data consumed and produced by

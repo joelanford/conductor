@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"net/http"
+	"net/http/pprof"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -18,24 +18,34 @@ import (
 
 func numProducer(start, increment int) operators.CustomSpoutFunc {
 	return func(ctx context.Context, oc *streams.OperatorContext) {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		delta := 0.0
 		i := start
+		incr := increment
 		counter := prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "speed",
-			Name:      "numbers_generated_even_total",
-			Help:      "Counter for the total number of even numbers generated",
+			Namespace: "numbers",
+			Name:      "numbers_generated_total",
+			Help:      "Counter for the total number of numbers generated",
 		}, []string{"operator", "instance"})
 		oc.RegisterMetric(counter)
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				if i > 9999999999 {
-					return
+				delta++
+				select {
+				case <-ticker.C:
+					counter.WithLabelValues(oc.Name(), oc.InstanceString()).Add(delta)
+					delta = 0.0
+				default:
 				}
-				counter.WithLabelValues(oc.Name(), strconv.Itoa(oc.Instance())).Inc()
 				oc.Submit(&streams.Tuple{Data: streams.TupleData{"i": i}}, 0)
-				i = i + increment
+				// t := streams.CreateTuple()
+				// t.Data["i"] = i
+				// oc.Submit(t, 0)
+				i += incr
 			}
 		}
 	}
@@ -45,8 +55,8 @@ func filter(t *streams.Tuple) bool {
 	return t.Data["i"].(int)%2 == 0
 }
 
-func printer(oc *streams.OperatorContext, t *streams.Tuple, port int) {
-	oc.Log().Infoln(t.Metadata, t.Data)
+func sink(oc *streams.OperatorContext, t *streams.Tuple, port int) {
+	//streams.ReturnTuple(t)
 }
 
 func main() {
@@ -54,25 +64,31 @@ func main() {
 	flag.Parse()
 
 	t := streams.NewTopology("numbers")
+	filtered := t.AddStream("filtered")
 
 	evenNumbers := t.AddStream("evenNumbers")
 	oddNumbers := t.AddStream("oddNumbers")
-	filtered := t.AddStream("filtered")
-
 	t.AddSpout("evenSource", operators.NewCustomSpout(numProducer(0, 2)), 1).Produces(evenNumbers)
 	t.AddSpout("oddSource", operators.NewCustomSpout(numProducer(1, 2)), 1).Produces(oddNumbers)
-	t.AddBolt("filter", operators.NewFilter(filter), 10).Consumes(evenNumbers, 1).Consumes(oddNumbers, 1).Produces(filtered)
-	t.AddBolt("filteredPrinter", operators.NewTupleLogger(), 1).Consumes(filtered, 0)
+	t.AddBolt("filter", operators.NewFilter(filter), 1).Consumes(evenNumbers, 100).Consumes(oddNumbers, 100).Produces(filtered)
+
+	// numbers := t.AddStream("numbers")
+	// t.AddSpout("numberSource", operators.NewCustomSpout(numProducerBetter()), 2).Produces(numbers)
+	// t.AddBolt("filter", operators.NewFilter(filter), 1).Consumes(numbers, 100).Produces(filtered)
+
+	t.AddBolt("sink", operators.NewCustom(sink), 1).Consumes(filtered, 1)
 
 	if *graphFile != "" {
 		t.CreateGraphFile(*graphFile)
 	} else {
 		var wg sync.WaitGroup
 		prometheus.MustRegister(prometheus.NewProcessCollector(os.Getpid(), "streams"))
-		prometheus.MustRegister(t.Collector())
+		prometheus.MustRegister(t)
 
 		r := http.NewServeMux()
 		r.Handle("/metrics", prometheus.Handler())
+		//r.HandleFunc("/debug/pprof/", pprof.Index)
+		r.HandleFunc("/debug/pprof/profile", pprof.Profile)
 
 		wg.Add(1)
 		go func() {
@@ -80,7 +96,7 @@ func main() {
 			wg.Done()
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Hour*24)
 		t.Run(ctx)
 
 		manners.Close()

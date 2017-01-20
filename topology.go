@@ -3,6 +3,8 @@ package streams
 import (
 	"context"
 	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Topology is the top-level entry point of streams.  It is used to create
@@ -113,4 +115,23 @@ func (t *Topology) Run(ctx context.Context) error {
 func (t *Topology) SetDebug(debug bool) *Topology {
 	t.debug = debug
 	return t
+}
+
+func (t *Topology) Describe(ch chan<- *prometheus.Desc) {
+	for _, bolt := range t.bolts {
+		bolt.metricsCollector.Describe(ch)
+	}
+	for _, spout := range t.spouts {
+		spout.metricsCollector.Describe(ch)
+	}
+}
+
+func (t *Topology) Collect(ch chan<- prometheus.Metric) {
+	for _, bolt := range t.bolts {
+		bolt.metricsCollector.Collect(ch)
+
+	}
+	for _, spout := range t.spouts {
+		spout.metricsCollector.Collect(ch)
+	}
 }

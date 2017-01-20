@@ -82,18 +82,19 @@ func (o *Spout) run(ctx context.Context) {
 	wg.Add(o.parallelism)
 	for instance := 0; instance < o.parallelism; instance++ {
 		go func(instance int) {
-			oc := &OperatorContext{
-				name:             o.name,
-				instance:         instance,
-				log:              NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
-				outputs:          o.outputs,
-				metricsCollector: o.metricsCollector,
-			}
+			oc := newOperatorContext(
+				o.name,
+				instance,
+				NewLogger(os.Stdout, fmt.Sprintf("%s[%d] ", o.name, instance), log.LstdFlags|log.Lmicroseconds|log.LUTC),
+				o.outputs,
+				o.metricsCollector,
+			)
 			oc.SetDebug(o.debug)
 			processor := o.createProcessor()
 			processor.Setup(ctx, oc)
 			processor.Process(ctx)
 			processor.Teardown()
+			oc.sendMetricTicker.Stop()
 			wg.Done()
 		}(instance)
 	}

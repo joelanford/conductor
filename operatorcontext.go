@@ -1,15 +1,45 @@
 package streams
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"strconv"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 // OperatorContext is passed to user-defined ProcessFunc and ProcessTupleFunc
 // functions to provide the operator name and tuple submission functionality.
 type OperatorContext struct {
 	name             string
 	instance         int
+	parallelism      int
 	log              InfoDebugLogger
 	outputs          []*outputPort
 	metricsCollector *MetricsCollector
+
+	numberLookup map[int]string
+
+	sendMetricDelta  float64
+	sendMetricTicker *time.Ticker
+}
+
+func newOperatorContext(name string, instance int, log InfoDebugLogger, outputs []*outputPort, mc *MetricsCollector) *OperatorContext {
+	numberLookup := make(map[int]string)
+	numberLookup[instance] = strconv.Itoa(instance)
+	for i := range outputs {
+		numberLookup[i] = strconv.Itoa(i)
+	}
+
+	oc := &OperatorContext{
+		name:             name,
+		instance:         instance,
+		log:              log,
+		outputs:          outputs,
+		metricsCollector: mc,
+		numberLookup:     numberLookup,
+		sendMetricTicker: time.NewTicker(500 * time.Millisecond),
+	}
+	return oc
 }
 
 // Name returns the name of the operator
@@ -19,6 +49,14 @@ func (o *OperatorContext) Name() string {
 
 func (o *OperatorContext) Instance() int {
 	return o.instance
+}
+
+func (o *OperatorContext) InstanceString() string {
+	return o.numberLookup[o.instance]
+}
+
+func (o *OperatorContext) Parallelism() int {
+	return o.parallelism
 }
 
 // Log returns the InfoDebugLogger instance associated with the operator. It is
@@ -36,6 +74,13 @@ func (o *OperatorContext) Submit(t *Tuple, port int) {
 	t.Metadata.StreamName = op.streamName
 	t.Metadata.Producer = o.name
 	t.Metadata.Instance = o.instance
+	o.sendMetricDelta++
+	select {
+	case <-o.sendMetricTicker.C:
+		op.tuplesSent.WithLabelValues(t.Metadata.Producer, o.numberLookup[o.instance], t.Metadata.StreamName, o.numberLookup[port]).Add(o.sendMetricDelta)
+		o.sendMetricDelta = 0.0
+	default:
+	}
 	op.output <- t
 }
 
